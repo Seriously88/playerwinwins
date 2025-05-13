@@ -50,3 +50,4 @@ SHOT_COOLDOWN = 30
 COURT_IMAGE = "assests/badminton court.jpg"
 PLAYER_IMAGE = "assests/player.jpg"
 SHUTTLE_IMAGE = "assests/shuttlecock.jpg"
+NPC_IMAGE = "assests/npc.png"
