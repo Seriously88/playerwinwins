@@ -16,8 +16,10 @@ class BadmintonGame:
         # Game state
         self.game_state = SERVE_STATE
         self.running = True
-        self.games_played = 0
         self.match_over = False
+        
+        # Lives system (only for player)
+        self.player_lives = 3
         
         # Create players
         self.player = Player(100, 400, BLUE)
@@ -29,8 +31,6 @@ class BadmintonGame:
         # Score
         self.player_score = 0
         self.npc_score = 0
-        self.player_games = 0
-        self.npc_games = 0
         self.font = pygame.font.SysFont(None, 36)
         
         # Determine who serves first (random)
@@ -75,8 +75,8 @@ class BadmintonGame:
                 
                 # Restart match with R key
                 if event.key == pygame.K_r and self.match_over:
-                    self.__init__()  # Reset the game
-                    
+                    self.reset_game(full_reset=True)  # Full reset when match is over
+                
                 # Display controls with H key
                 if event.key == pygame.K_h:
                     self.show_controls = not getattr(self, 'show_controls', False)
@@ -134,6 +134,8 @@ class BadmintonGame:
             
             # Check if shuttlecock hits the ground, goes out of bounds, or hits the net
             if self.shuttle.is_grounded() or self.shuttle.out_of_bounds:
+                point_scored = False
+                
                 # Award point based on where the fault occurred
                 if self.shuttle.is_grounded():
                     # Point goes to opposite side of where shuttlecock landed
@@ -142,11 +144,13 @@ class BadmintonGame:
                         self.npc_score += 1
                         self.player_serves = False
                         self.show_feedback("Point for NPC!", RED)
+                        point_scored = True
                     else:
                         # Point for player if shuttle lands in NPC's court
                         self.player_score += 1
                         self.player_serves = True
                         self.show_feedback("Point for Player!", BLUE)
+                        point_scored = True
                 elif self.shuttle.out_of_bounds:
                     # Point goes to the side that didn't hit it last
                     # We'll determine this based on the direction the shuttle was moving
@@ -155,31 +159,39 @@ class BadmintonGame:
                         self.npc_score += 1
                         self.player_serves = False
                         self.show_feedback("Out of bounds! Point for NPC", RED)
+                        point_scored = True
                     else:
                         # Shuttle was moving left (toward player), so last hit by NPC
                         self.player_score += 1
                         self.player_serves = True
                         self.show_feedback("Out of bounds! Point for Player", BLUE)
+                        point_scored = True
                 
-                # Check if game has been won
-                winner = check_win_condition(self.player_score, self.npc_score)
-                if winner:
-                    # Add a game to the winner's total
-                    if winner == "Player":
-                        self.player_games += 1
-                        self.show_feedback("Player wins the game!", BLUE, 120)
-                    else:
-                        self.npc_games += 1
-                        self.show_feedback("NPC wins the game!", RED, 120)
+                # Check if NPC has reached 10 points
+                if self.npc_score >= 10:
+                    # Player loses a life
+                    self.player_lives -= 1
                     
-                    # Check if match has been won (best of 3)
-                    if self.player_games >= GAMES_TO_WIN_MATCH or self.npc_games >= GAMES_TO_WIN_MATCH:
-                        self.match_over = True
-                    else:
-                        # Reset for the next game
-                        self.player_score = 0
+                    if self.player_lives > 0:
+                        self.show_feedback(f"Player lost a life! Lives remaining: {self.player_lives}", RED, 120)
+                        # Reset scores to 0-0
                         self.npc_score = 0
-                        self.games_played += 1
+                        self.player_score = 0
+                        # Reset the game state but keep the remaining lives
+                        self.reset_game(full_reset=False)
+                        return  # Skip the rest of the update as we're resetting
+                    else:
+                        # Game over when player has no lives left
+                        self.match_over = True
+                        self.show_feedback("Game Over! Player is out of lives!", RED, 120)
+                        return  # Skip the rest of the update
+                
+                # If the game hasn't ended due to lives, check for win by score
+                if not self.match_over and point_scored:
+                    winner = check_win_condition(self.player_score, self.npc_score)
+                    if winner:
+                        self.match_over = True
+                        self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
                 
                 # Reset for next serve
                 self.game_state = SERVE_STATE
@@ -235,12 +247,16 @@ class BadmintonGame:
         # Draw shuttlecock
         self.shuttle.draw(self.screen)
         
-        # Draw scores and games
+        # Draw scores
         score_text = self.font.render(f"{self.player_score} - {self.npc_score}", True, BLACK)
         self.screen.blit(score_text, (WIDTH//2 - 30, 20))
         
-        games_text = self.font.render(f"Games: {self.player_games} - {self.npc_games}", True, BLACK)
-        self.screen.blit(games_text, (WIDTH//2 - 60, 60))
+        # Draw lives (hearts)
+        lives_text = pygame.font.SysFont(None, 24).render("Player Lives:", True, BLUE)
+        self.screen.blit(lives_text, (20, 10))
+        for i in range(self.player_lives):
+            pygame.draw.polygon(self.screen, BLUE, 
+                [(30 + i*25, 30), (40 + i*25, 20), (50 + i*25, 30), (40 + i*25, 45)])
         
         # Draw serve instructions
         if self.game_state == SERVE_STATE and self.player_serves and self.serving and not self.match_over:
@@ -256,11 +272,11 @@ class BadmintonGame:
         if getattr(self, 'show_controls', False):
             controls = [
                 "Controls:",
-                "Move: Arrow Left/Right",
-                "Jump: Space",
-                "Crouch: Down Arrow",
+                "Move Left/Right: Arrow Left/Right",
+                "Move Up/Down: Arrow Up/Down",
+                "Crouch: Down Arrow (when on ground)",
                 "Normal Shot: Z",
-                "Smash (while jumping): X",
+                "Smash (while in air): X",
                 "Drop Shot: C",
                 "Toggle Controls: H"
             ]
@@ -274,14 +290,21 @@ class BadmintonGame:
         # Draw badminton rules
         if self.game_state == SERVE_STATE and not getattr(self, 'show_controls', False):
             # Display compact rules at the bottom of the screen
+            display_message(self.screen, f"Player has {self.player_lives} lives. Lose a life when NPC reaches 10 points.", 
+                           (50, HEIGHT - 60), 20)
             display_message(self.screen, f"First to {POINTS_TO_WIN} wins. If {POINTS_TO_WIN-1}-{POINTS_TO_WIN-1}, win by {MIN_POINT_DIFFERENCE} points. If {MAX_SCORE-1}-{MAX_SCORE-1}, first to {MAX_SCORE} wins.", 
                            (50, HEIGHT - 40), 20)
         
         # Display match result if over
         if self.match_over:
-            winner = "Player" if self.player_games > self.npc_games else "NPC"
+            winner = "Player" if (self.player_score > self.npc_score or self.player_lives <= 0) else "NPC"
             display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
-            display_message(self.screen, f"Final score: {self.player_games}-{self.npc_games}", (WIDTH//2 - 100, HEIGHT//2), 36)
+            
+            if self.player_lives <= 0:
+                display_message(self.screen, "Player is out of lives!", (WIDTH//2 - 100, HEIGHT//2), 36)
+            else:
+                display_message(self.screen, f"Final score: {self.player_score}-{self.npc_score}", (WIDTH//2 - 100, HEIGHT//2), 36)
+                
             display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
         
         pygame.display.flip()
@@ -294,3 +317,44 @@ class BadmintonGame:
             self.draw()
         
         pygame.quit()
+
+    def reset_game(self, full_reset=False):
+        """Reset the game state after losing a life. 
+        If full_reset is True, reset everything including lives."""
+        
+        # Reset scores only on full reset
+        if full_reset:
+            self.player_score = 0
+            self.npc_score = 0
+            self.player_lives = 3
+            self.match_over = False
+        
+        # Reset game state
+        self.game_state = SERVE_STATE
+        
+        # Reset player positions
+        self.player.rect.x = 100
+        self.player.rect.y = 400
+        self.npc.rect.x = 600 
+        self.npc.rect.y = 400
+        
+        # Reset shuttlecock
+        self.shuttle.x = self.player.rect.centerx
+        self.shuttle.y = self.player.rect.top - 20
+        self.shuttle.vx = 0
+        self.shuttle.vy = 0
+        self.shuttle.out_of_bounds = False
+        self.shuttle.gravity_multiplier = 1.0
+        
+        # Reset serving state
+        self.serving = True
+        
+        # Randomly determine who serves
+        self.player_serves = random.choice([True, False])
+        
+        # Show feedback message
+        if not full_reset:
+            if self.player_lives > 0:
+                self.show_feedback("Get ready for the next round!", GREEN, 120)
+            else:
+                self.match_over = True

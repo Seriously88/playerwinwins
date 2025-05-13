@@ -43,8 +43,9 @@ class Player:
             self.racket_rect.midright = (self.rect.left, self.rect.centery - 20)
 
     def handle_input(self, keys):
-        # Reset horizontal velocity
+        # Reset velocities
         self.velocity_x = 0
+        self.velocity_y = 0
         
         # Left/Right movement
         if keys[pygame.K_LEFT]:
@@ -54,15 +55,20 @@ class Player:
             self.velocity_x = SPRINT_SPEED if keys[pygame.K_LSHIFT] else WALK_SPEED
             self.facing_right = True
 
-        # Jump
-        if keys[pygame.K_SPACE] and self.on_ground and not self.is_crouching:
-            self.velocity_y = JUMP_STRENGTH
+        # Up/Down movement
+        if keys[pygame.K_UP]:
+            self.velocity_y = -WALK_SPEED
             self.on_ground = False
+        elif keys[pygame.K_DOWN]:
+            if self.on_ground:
+                self.is_crouching = True
+            else:
+                self.velocity_y = WALK_SPEED
+        else:
+            self.is_crouching = False
         
-        # Crouch
-        self.is_crouching = keys[pygame.K_DOWN] and self.on_ground
+        # Adjust hitbox when crouching
         if self.is_crouching:
-            # Adjust hitbox for crouching
             if not hasattr(self, 'standing_height'):
                 self.standing_height = self.rect.height
             self.rect.height = self.standing_height * 0.7
@@ -78,7 +84,7 @@ class Player:
             # Normal swing
             if keys[pygame.K_z]:
                 self.swing_racket("normal")
-            # Smash (while jumping)
+            # Smash (while in air)
             elif keys[pygame.K_x] and not self.on_ground:
                 self.swing_racket("smash")
             # Drop shot
@@ -154,8 +160,7 @@ class Player:
         # Apply horizontal movement
         self.rect.x += self.velocity_x
         
-        # Apply gravity
-        self.velocity_y += GRAVITY
+        # Apply vertical movement (no gravity)
         self.rect.y += self.velocity_y
 
         # Keep player within screen bounds
@@ -163,12 +168,25 @@ class Player:
             self.rect.left = COURT_LEFT
         if self.rect.right > COURT_RIGHT:
             self.rect.right = COURT_RIGHT
-
+            
+        # Prevent player from crossing the net
+        if self.rect.right > NET_X and self.rect.left < NET_X:
+            # If player is mostly on the left side, push left
+            if self.rect.centerx < NET_X:
+                self.rect.right = NET_X
+            # If player is mostly on the right side, push right
+            else:
+                self.rect.left = NET_X
+                
         # Ground collision
         if self.rect.bottom >= COURT_GROUND_Y:
             self.rect.bottom = COURT_GROUND_Y
-            self.velocity_y = 0
             self.on_ground = True
+            
+        # Ceiling collision
+        if self.rect.top < 0:
+            self.rect.top = 0
+            self.velocity_y = 0
         
         # Update racket position
         self.update_racket_position()
@@ -209,9 +227,19 @@ class NPC(Player):
         self.difficulty = 0.7  # 0.0 to 1.0
         self.reaction_time = int(60 * (1.0 - self.difficulty))  # Frames to react
         self.accuracy = self.difficulty  # How accurately NPC aims shots
+        
+        # Load NPC image
+        try:
+            self.image = pygame.image.load(NPC_IMAGE)
+            self.image = pygame.transform.scale(self.image, (40, 80))
+        except Exception as e:
+            print(f"Error loading NPC image: {e}")
 
     def track_shuttlecock(self, shuttle):
         """AI logic to track and respond to shuttlecock"""
+        # Reset vertical velocity
+        self.velocity_y = 0
+        
         # Only track if shuttlecock is moving toward NPC
         if shuttle.vx < 0 and shuttle.x > NET_X:
             # Basic prediction of where shuttlecock will land
@@ -228,7 +256,7 @@ class NPC(Player):
             # Set target position
             self.target_x = predicted_x
             
-            # Move toward target
+            # Move toward target horizontally
             if abs(self.rect.centerx - self.target_x) > 20:
                 if self.rect.centerx < self.target_x:
                     self.velocity_x = WALK_SPEED
@@ -239,10 +267,17 @@ class NPC(Player):
             else:
                 self.velocity_x = 0
             
-            # Jump if shuttlecock is high
-            if shuttle.y < self.rect.top and self.on_ground and random.random() < self.difficulty:
-                self.velocity_y = JUMP_STRENGTH * 0.9
-                self.on_ground = False
+            # Vertical movement based on shuttlecock height
+            target_y = shuttle.y
+            # Add some reasonable height offset
+            target_y -= 30
+            
+            # Move toward target vertically
+            if abs(self.rect.centery - target_y) > 20:
+                if self.rect.centery > target_y:
+                    self.velocity_y = -WALK_SPEED
+                else:
+                    self.velocity_y = WALK_SPEED
             
             # Decide what type of shot to use based on shuttlecock position
             if self.decision_timer <= 0 and shuttle.x < self.rect.right + 100:
@@ -276,18 +311,17 @@ class NPC(Player):
             if self.rect.left < NET_X + 50 or self.rect.right > COURT_RIGHT - 20:
                 self.direction *= -1
             
-            # Occasionally jump
+            # Random vertical movement
             self.jump_timer += 1
-            if self.jump_timer > 120 and self.on_ground:  # Jump every ~2 seconds
-                self.velocity_y = JUMP_STRENGTH * 0.8
-                self.on_ground = False
+            if self.jump_timer > 120:
+                self.velocity_y = random.choice([-WALK_SPEED, WALK_SPEED]) * 0.5
                 self.jump_timer = 0
         
         # Let parent class handle standard movement physics
         super().update()
         
         # Ensure NPC stays on right side of net
-        if self.rect.left < NET_X + 10:
-            self.rect.left = NET_X + 10
+        if self.rect.left < NET_X:
+            self.rect.left = NET_X
             self.velocity_x = WALK_SPEED  # Move back to right side
             self.direction = 1  # Change direction if at net

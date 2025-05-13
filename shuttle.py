@@ -23,7 +23,13 @@ class Shuttlecock:
     def update(self):
         self.x += self.vx
         self.y += self.vy
-        self.vy += SHUTTLE_GRAVITY * self.gravity_multiplier  # Apply gravity with multiplier
+        self.vy += SHUTTLE_GRAVITY * self.gravity_multiplier  # Restore gravity for shuttlecock
+        
+        # Gradually slow down the shuttlecock (air resistance)
+        if abs(self.vx) > 0.1:
+            self.vx *= 0.995
+        if abs(self.vy) > 0.1:
+            self.vy *= 0.995
 
         # Bounce off top
         if self.y - self.radius <= 0:
