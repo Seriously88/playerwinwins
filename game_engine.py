@@ -174,6 +174,8 @@ class BadmintonGame:
                     
                     if self.player_lives > 0:
                         self.show_feedback(f"Player lost a life! Lives remaining: {self.player_lives}", RED, 120)
+                        # Adjust NPC difficulty based on player lives
+                        self.npc.adjust_difficulty(self.player_lives)
                         # Reset scores to 0-0
                         self.npc_score = 0
                         self.player_score = 0
@@ -183,7 +185,7 @@ class BadmintonGame:
                     else:
                         # Game over when player has no lives left
                         self.match_over = True
-                        self.show_feedback("Game Over! Player is out of lives!", RED, 120)
+                        self.show_feedback("Game Over! NPC wins the match!", RED, 120)
                         return  # Skip the rest of the update
                 
                 # If the game hasn't ended due to lives, check for win by score
@@ -297,12 +299,15 @@ class BadmintonGame:
         
         # Display match result if over
         if self.match_over:
-            winner = "Player" if (self.player_score > self.npc_score or self.player_lives <= 0) else "NPC"
-            display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
-            
             if self.player_lives <= 0:
+                # Show that NPC wins when player is out of lives
+                winner = "NPC"
+                display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
                 display_message(self.screen, "Player is out of lives!", (WIDTH//2 - 100, HEIGHT//2), 36)
             else:
+                # Determine winner based on score
+                winner = "Player" if self.player_score > self.npc_score else "NPC"
+                display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
                 display_message(self.screen, f"Final score: {self.player_score}-{self.npc_score}", (WIDTH//2 - 100, HEIGHT//2), 36)
                 
             display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
@@ -328,6 +333,8 @@ class BadmintonGame:
             self.npc_score = 0
             self.player_lives = 3
             self.match_over = False
+            # Reset NPC difficulty to base level
+            self.npc.adjust_difficulty(3)
         
         # Reset game state
         self.game_state = SERVE_STATE

@@ -222,9 +222,12 @@ class NPC(Player):
         self.decision_timer = 0
         self.target_x = 0
         self.facing_right = False
+        self.stuck_timer = 0  # Track if NPC is stuck
+        self.last_position = (x, y)  # Track last position to detect being stuck
         
         # AI behavior settings
-        self.difficulty = 0.7  # 0.0 to 1.0
+        self.base_difficulty = 0.6  # Base difficulty 
+        self.difficulty = self.base_difficulty  # Current difficulty
         self.reaction_time = int(60 * (1.0 - self.difficulty))  # Frames to react
         self.accuracy = self.difficulty  # How accurately NPC aims shots
         
@@ -235,6 +238,20 @@ class NPC(Player):
         except Exception as e:
             print(f"Error loading NPC image: {e}")
 
+    def adjust_difficulty(self, player_lives):
+        """Adjust NPC difficulty based on player's lives"""
+        # Make NPC easier when player has fewer lives
+        if player_lives == 1:
+            self.difficulty = self.base_difficulty - 0.2  # Much easier when on last life
+        elif player_lives == 2:
+            self.difficulty = self.base_difficulty - 0.1  # Somewhat easier
+        else:
+            self.difficulty = self.base_difficulty  # Normal difficulty
+            
+        # Update dependent attributes
+        self.reaction_time = int(60 * (1.0 - self.difficulty))
+        self.accuracy = self.difficulty
+
     def track_shuttlecock(self, shuttle):
         """AI logic to track and respond to shuttlecock"""
         # Reset vertical velocity
@@ -242,60 +259,101 @@ class NPC(Player):
         
         # Only track if shuttlecock is moving toward NPC
         if shuttle.vx < 0 and shuttle.x > NET_X:
-            # Basic prediction of where shuttlecock will land
-            time_to_ground = (COURT_GROUND_Y - shuttle.y) / (shuttle.vy + 0.001)  # Avoid division by zero
-            predicted_x = shuttle.x + (shuttle.vx * time_to_ground)
+            # Decide if NPC will try to catch the shuttlecock or deliberately miss
+            will_attempt_catch = random.random() < (self.difficulty + 0.1)  # Base chance scaled by difficulty
+            
+            # If NPC decides not to attempt catch, move away from the predicted landing spot
+            if not will_attempt_catch:
+                # Create a movement away from the shuttlecock
+                dodge_x = shuttle.x + random.uniform(-150, -50) if shuttle.x < self.rect.centerx else shuttle.x + random.uniform(50, 150)
+                # Stay within court bounds
+                dodge_x = max(NET_X + 50, min(dodge_x, COURT_RIGHT - 50))
+                
+                # Set dodge position as target
+                self.target_x = dodge_x
+                
+                # Move toward dodge position
+                if abs(self.rect.centerx - self.target_x) > 20:
+                    if self.rect.centerx < self.target_x:
+                        self.velocity_x = WALK_SPEED * 0.7  # Move slower when dodging
+                        self.facing_right = True
+                    else:
+                        self.velocity_x = -WALK_SPEED * 0.7
+                        self.facing_right = False
+                else:
+                    self.velocity_x = 0
+                    
+                # Random vertical movement when dodging
+                if random.random() < 0.3:
+                    self.velocity_y = random.choice([-WALK_SPEED, WALK_SPEED]) * 0.6
+                
+                return  # Skip the rest of the tracking logic
+            
+            # Normal tracking behavior when attempting to catch
+            # Improved prediction algorithm
+            # Calculate time to intercept based on current shuttle position and velocity
+            shuttle_speed = abs(shuttle.vx)
+            time_to_intercept = min(60, max(10, abs(shuttle.x - self.rect.centerx) / (shuttle_speed + 0.1)))
+            
+            # Predict shuttle position at intercept time
+            predicted_x = shuttle.x + (shuttle.vx * time_to_intercept)
+            predicted_y = shuttle.y + (shuttle.vy * time_to_intercept) + (0.5 * SHUTTLE_GRAVITY * time_to_intercept * time_to_intercept)
             
             # Add some randomness/error based on difficulty
-            error_margin = (1.0 - self.accuracy) * 100
+            error_margin = (1.0 - self.accuracy) * 80
             predicted_x += random.uniform(-error_margin, error_margin)
             
             # Constrain prediction to right side of court
-            predicted_x = max(NET_X + 50, min(predicted_x, COURT_RIGHT - 50))
+            predicted_x = max(NET_X + 30, min(predicted_x, COURT_RIGHT - 30))
+            predicted_y = max(50, min(predicted_y, COURT_GROUND_Y - 30))
             
             # Set target position
             self.target_x = predicted_x
             
+            # Adjust movement speed based on urgency
+            urgency = max(0.5, min(1.5, shuttle_speed / 8))
+            
             # Move toward target horizontally
-            if abs(self.rect.centerx - self.target_x) > 20:
+            if abs(self.rect.centerx - self.target_x) > 15:
                 if self.rect.centerx < self.target_x:
-                    self.velocity_x = WALK_SPEED
+                    self.velocity_x = WALK_SPEED * urgency
                     self.facing_right = True
                 else:
-                    self.velocity_x = -WALK_SPEED
+                    self.velocity_x = -WALK_SPEED * urgency
                     self.facing_right = False
             else:
                 self.velocity_x = 0
             
-            # Vertical movement based on shuttlecock height
-            target_y = shuttle.y
-            # Add some reasonable height offset
-            target_y -= 30
+            # Vertical movement based on predicted shuttlecock height
+            target_y = predicted_y - 30  # Aim to hit with racket
             
-            # Move toward target vertically
-            if abs(self.rect.centery - target_y) > 20:
+            # Move toward target vertically with urgency
+            if abs(self.rect.centery - target_y) > 15:
                 if self.rect.centery > target_y:
-                    self.velocity_y = -WALK_SPEED
+                    self.velocity_y = -WALK_SPEED * urgency
                 else:
-                    self.velocity_y = WALK_SPEED
+                    self.velocity_y = WALK_SPEED * urgency
             
             # Decide what type of shot to use based on shuttlecock position
             if self.decision_timer <= 0 and shuttle.x < self.rect.right + 100:
                 # Calculate distance to shuttle
                 distance = abs(shuttle.x - self.rect.centerx)
+                vertical_dist = abs(shuttle.y - self.rect.centery)
                 
                 # Try to hit the shuttlecock if it's close enough
-                if distance < 80:
-                    # Choose shot type based on situation
-                    if not self.on_ground and shuttle.y < self.rect.centery:
-                        # Smash if jumping and shuttlecock is high
-                        self.swing_racket("smash")
-                    elif shuttle.y > self.rect.centery and random.random() < 0.3:
-                        # Occasionally use drop shot
-                        self.swing_racket("drop")
-                    else:
-                        # Normal shot
-                        self.swing_racket("normal")
+                if distance < 80 and vertical_dist < 60:
+                    # Add another random chance to miss even when in position
+                    if random.random() < (self.difficulty + 0.2):  # Higher chance to swing when in position
+                        # Choose shot type based on situation
+                        if not self.on_ground and shuttle.y < self.rect.centery:
+                            # Smash if jumping and shuttlecock is high
+                            self.swing_racket("smash")
+                        elif shuttle.y > self.rect.centery and random.random() < 0.3:
+                            # Occasionally use drop shot
+                            self.swing_racket("drop")
+                        else:
+                            # Normal shot
+                            self.swing_racket("normal")
                     
                     self.decision_timer = self.reaction_time
     
@@ -304,17 +362,60 @@ class NPC(Player):
         if self.decision_timer > 0:
             self.decision_timer -= 1
         
+        # Check if NPC is stuck in the same position
+        current_pos = (self.rect.x, self.rect.y)
+        if (abs(current_pos[0] - self.last_position[0]) < 2 and
+            abs(current_pos[1] - self.last_position[1]) < 2):
+            self.stuck_timer += 1
+        else:
+            self.stuck_timer = 0
+        
+        # If stuck for too long, reset position to center of court
+        if self.stuck_timer > 120:  # If stuck for 2 seconds (60fps * 2)
+            self.unstick()
+            self.stuck_timer = 0
+        
+        # Update last position
+        self.last_position = current_pos
+        
+        # Prevent NPC from getting stuck at edges
+        if self.rect.right >= COURT_RIGHT - 5:
+            self.velocity_x = -WALK_SPEED
+            self.direction = -1
+        elif self.rect.left <= NET_X + 5:
+            self.velocity_x = WALK_SPEED
+            self.direction = 1
+        
         # Default movement if not tracking shuttlecock
         if self.velocity_x == 0:
             # Move back and forth in right half of court
-            self.rect.x += self.direction * 2
-            if self.rect.left < NET_X + 50 or self.rect.right > COURT_RIGHT - 20:
-                self.direction *= -1
+            # Stay more centrally positioned
+            target_x = NET_X + (COURT_RIGHT - NET_X) * 0.5  # Target center of right court
+            if abs(self.rect.centerx - target_x) > 50:
+                if self.rect.centerx < target_x:
+                    self.velocity_x = WALK_SPEED * 0.7
+                    self.direction = 1
+                else:
+                    self.velocity_x = -WALK_SPEED * 0.7
+                    self.direction = -1
+            else:
+                # Small random movement when in center position
+                self.rect.x += self.direction * 1.5
+                if random.random() < 0.01:  # Occasionally change direction
+                    self.direction *= -1
             
-            # Random vertical movement
+            # Random vertical movement - more controlled
             self.jump_timer += 1
             if self.jump_timer > 120:
-                self.velocity_y = random.choice([-WALK_SPEED, WALK_SPEED]) * 0.5
+                # Target middle height of court
+                target_y = COURT_GROUND_Y * 0.6
+                if abs(self.rect.centery - target_y) > 50:
+                    if self.rect.centery > target_y:
+                        self.velocity_y = -WALK_SPEED * 0.4
+                    else:
+                        self.velocity_y = WALK_SPEED * 0.4
+                else:
+                    self.velocity_y = random.choice([-WALK_SPEED, WALK_SPEED]) * 0.3
                 self.jump_timer = 0
         
         # Let parent class handle standard movement physics
@@ -325,3 +426,12 @@ class NPC(Player):
             self.rect.left = NET_X
             self.velocity_x = WALK_SPEED  # Move back to right side
             self.direction = 1  # Change direction if at net
+    
+    def unstick(self):
+        """Reset NPC position if stuck"""
+        # Move to center-right of court
+        self.rect.x = NET_X + (COURT_RIGHT - NET_X) * 0.5
+        self.rect.y = COURT_GROUND_Y - 100
+        self.velocity_x = 0
+        self.velocity_y = 0
+        self.direction = random.choice([-1, 1])
