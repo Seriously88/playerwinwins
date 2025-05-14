@@ -121,7 +121,15 @@ class Player:
         shuttle_rect = pygame.Rect(shuttle.x - shuttle.radius, shuttle.y - shuttle.radius, 
                                  shuttle.radius * 2, shuttle.radius * 2)
         
-        if self.racket_rect.colliderect(shuttle_rect):
+        # For NPC, give a slightly larger hitbox for better hit probability
+        if isinstance(self, NPC):
+            # Extend the racket hitbox slightly for NPC
+            extended_racket = self.racket_rect.inflate(10, 10)
+            hit = extended_racket.colliderect(shuttle_rect)
+        else:
+            hit = self.racket_rect.colliderect(shuttle_rect)
+        
+        if hit:
             # Calculate hit position relative to racket center (for angle)
             hit_position = (shuttle.x - self.racket_rect.centerx) / (self.racket_rect.width / 2)
             
@@ -226,7 +234,7 @@ class NPC(Player):
         self.last_position = (x, y)  # Track last position to detect being stuck
         
         # AI behavior settings
-        self.base_difficulty = 0.6  # Base difficulty 
+        self.base_difficulty = 0.75  # Increased base difficulty for better performance
         self.difficulty = self.base_difficulty  # Current difficulty
         self.reaction_time = int(60 * (1.0 - self.difficulty))  # Frames to react
         self.accuracy = self.difficulty  # How accurately NPC aims shots
@@ -240,11 +248,11 @@ class NPC(Player):
 
     def adjust_difficulty(self, player_lives):
         """Adjust NPC difficulty based on player's lives"""
-        # Make NPC easier when player has fewer lives
+        # Make NPC slightly easier when player has fewer lives, but keep it challenging
         if player_lives == 1:
-            self.difficulty = self.base_difficulty - 0.2  # Much easier when on last life
+            self.difficulty = self.base_difficulty - 0.1  # Slightly easier when on last life
         elif player_lives == 2:
-            self.difficulty = self.base_difficulty - 0.1  # Somewhat easier
+            self.difficulty = self.base_difficulty - 0.05  # Very slightly easier
         else:
             self.difficulty = self.base_difficulty  # Normal difficulty
             
@@ -257,10 +265,16 @@ class NPC(Player):
         # Reset vertical velocity
         self.velocity_y = 0
         
-        # Only track if shuttlecock is moving toward NPC
-        if shuttle.vx < 0 and shuttle.x > NET_X:
+        # Detect if shuttlecock is heading toward NPC side
+        # Added support for tracking shuttlecock moving in both directions
+        shuttle_in_npc_court = shuttle.x > NET_X
+        shuttle_heading_to_npc = shuttle.vx < 0
+        
+        # Enhanced tracking logic to track shuttlecock better on NPC side
+        if (shuttle_heading_to_npc and shuttle_in_npc_court) or (shuttle_in_npc_court and abs(shuttle.x - self.rect.centerx) < 200):
             # Decide if NPC will try to catch the shuttlecock or deliberately miss
-            will_attempt_catch = random.random() < (self.difficulty + 0.1)  # Base chance scaled by difficulty
+            # Increase the chance of attempting to catch significantly
+            will_attempt_catch = random.random() < (self.difficulty + 0.25)  # Higher base chance to attempt catch
             
             # If NPC decides not to attempt catch, move away from the predicted landing spot
             if not will_attempt_catch:
@@ -293,14 +307,14 @@ class NPC(Player):
             # Improved prediction algorithm
             # Calculate time to intercept based on current shuttle position and velocity
             shuttle_speed = abs(shuttle.vx)
-            time_to_intercept = min(60, max(10, abs(shuttle.x - self.rect.centerx) / (shuttle_speed + 0.1)))
+            time_to_intercept = min(40, max(5, abs(shuttle.x - self.rect.centerx) / (shuttle_speed + 0.1)))
             
             # Predict shuttle position at intercept time
             predicted_x = shuttle.x + (shuttle.vx * time_to_intercept)
             predicted_y = shuttle.y + (shuttle.vy * time_to_intercept) + (0.5 * SHUTTLE_GRAVITY * time_to_intercept * time_to_intercept)
             
-            # Add some randomness/error based on difficulty
-            error_margin = (1.0 - self.accuracy) * 80
+            # Add smaller randomness/error based on difficulty to improve accuracy
+            error_margin = (1.0 - self.accuracy) * 60  # Reduced error margin
             predicted_x += random.uniform(-error_margin, error_margin)
             
             # Constrain prediction to right side of court
@@ -310,8 +324,9 @@ class NPC(Player):
             # Set target position
             self.target_x = predicted_x
             
-            # Adjust movement speed based on urgency
-            urgency = max(0.5, min(1.5, shuttle_speed / 8))
+            # Adjust movement speed based on urgency - increase speed for better response
+            # Make NPC move faster for fast shuttlecocks
+            urgency = max(0.8, min(1.8, shuttle_speed / 6))
             
             # Move toward target horizontally
             if abs(self.rect.centerx - self.target_x) > 15:
@@ -335,15 +350,16 @@ class NPC(Player):
                     self.velocity_y = WALK_SPEED * urgency
             
             # Decide what type of shot to use based on shuttlecock position
-            if self.decision_timer <= 0 and shuttle.x < self.rect.right + 100:
+            if self.decision_timer <= 0:
                 # Calculate distance to shuttle
                 distance = abs(shuttle.x - self.rect.centerx)
                 vertical_dist = abs(shuttle.y - self.rect.centery)
                 
                 # Try to hit the shuttlecock if it's close enough
-                if distance < 80 and vertical_dist < 60:
-                    # Add another random chance to miss even when in position
-                    if random.random() < (self.difficulty + 0.2):  # Higher chance to swing when in position
+                # Increased detection range for more reliable hits
+                if distance < 100 and vertical_dist < 80:
+                    # Increase chance to swing even when in position
+                    if random.random() < (self.difficulty + 0.4):  # Much higher chance to swing
                         # Choose shot type based on situation
                         if not self.on_ground and shuttle.y < self.rect.centery:
                             # Smash if jumping and shuttlecock is high
