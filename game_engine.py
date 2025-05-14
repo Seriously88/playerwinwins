@@ -102,12 +102,15 @@ class BadmintonGame:
         self.player.update()
         
         # Track shuttlecock crossing from player to NPC side
-        if self.shuttle.vx > 0 and self.shuttle.x > NET_X and self.shuttle_in_possession == "player":
-            # Shuttle is crossing from player to NPC side
-            self.npc.track_shuttlecock(self.shuttle)
-        elif self.shuttle.vx < 0 and self.shuttle.x < NET_X and self.shuttle_in_possession == "npc":
+        if self.shuttle.vx > 0 and self.shuttle.x > NET_X:
+            # Shuttle is crossing from player to NPC side or continues to be on NPC side
+            self.npc.track_shuttlecock(self.shuttle, self.player)
+        elif self.shuttle.vx < 0 and self.shuttle.x < NET_X:
             # Player should prepare to receive
             pass
+        else:
+            # Always track shuttlecock position for better NPC awareness
+            self.npc.track_shuttlecock(self.shuttle, self.player)
         
         # Update NPC with AI behavior
         self.npc.update()
