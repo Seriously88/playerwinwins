@@ -17,7 +17,7 @@ SERVE_STATE = 0
 PLAY_STATE = 1
 
 # Badminton rules
-POINTS_TO_WIN = 21
+POINTS_TO_WIN = 15
 MAX_SCORE = 30
 MIN_POINT_DIFFERENCE = 2
 GAMES_TO_WIN_MATCH = 2
@@ -47,7 +47,7 @@ DROP_SHOT_SPEED = 4
 SHOT_COOLDOWN = 30
 
 # Asset paths
-COURT_IMAGE = "assests/badminton court.jpg"
-PLAYER_IMAGE = "assests/player.jpg"
-SHUTTLE_IMAGE = "assests/shuttlecock.jpg"
-NPC_IMAGE = "assests/npc.png"
+COURT_IMAGE = "Group Assignment ISE/assests/badminton court.jpg"
+PLAYER_IMAGE = "Group Assignment ISE/assests/player.jpg"
+SHUTTLE_IMAGE = "Group Assignment ISE/assests/shuttlecock.jpg"
+NPC_IMAGE = "Group Assignment ISE/assests/npc.png"

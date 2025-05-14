@@ -16,8 +16,10 @@ class BadmintonGame:
         # Game state
         self.game_state = SERVE_STATE
         self.running = True
-        self.games_played = 0
         self.match_over = False
+        
+        # Lives system (only for player)
+        self.player_lives = 3
         
         # Create players
         self.player = Player(100, 400, BLUE)
@@ -29,13 +31,14 @@ class BadmintonGame:
         # Score
         self.player_score = 0
         self.npc_score = 0
-        self.player_games = 0
-        self.npc_games = 0
         self.font = pygame.font.SysFont(None, 36)
         
         # Determine who serves first (random)
         self.player_serves = random.choice([True, False])
         self.serving = True
+        
+        # Shuttlecock possession tracking
+        self.shuttle_in_possession = "player" if self.player_serves else "npc"
         
         # Shot feedback
         self.feedback_message = ""
@@ -75,8 +78,8 @@ class BadmintonGame:
                 
                 # Restart match with R key
                 if event.key == pygame.K_r and self.match_over:
-                    self.__init__()  # Reset the game
-                    
+                    self.reset_game(full_reset=True)  # Full reset when match is over
+                
                 # Display controls with H key
                 if event.key == pygame.K_h:
                     self.show_controls = not getattr(self, 'show_controls', False)
@@ -98,8 +101,15 @@ class BadmintonGame:
         # Update players
         self.player.update()
         
+        # Track shuttlecock crossing from player to NPC side
+        if self.shuttle.vx > 0 and self.shuttle.x > NET_X and self.shuttle_in_possession == "player":
+            # Shuttle is crossing from player to NPC side
+            self.npc.track_shuttlecock(self.shuttle)
+        elif self.shuttle.vx < 0 and self.shuttle.x < NET_X and self.shuttle_in_possession == "npc":
+            # Player should prepare to receive
+            pass
+        
         # Update NPC with AI behavior
-        self.npc.track_shuttlecock(self.shuttle)
         self.npc.update()
         
         # Don't proceed with game logic if match is over
@@ -118,6 +128,9 @@ class BadmintonGame:
         if self.game_state == PLAY_STATE:
             # Check if player hits shuttlecock
             if self.player.hit_shuttlecock(self.shuttle):
+                # Update possession - shuttle now belongs to player
+                self.shuttle_in_possession = "player"
+                
                 if self.player.swing_type == "smash":
                     self.show_feedback("SMASH!", (255, 0, 0))
                 elif self.player.swing_type == "drop":
@@ -127,6 +140,9 @@ class BadmintonGame:
             
             # Check if NPC hits shuttlecock
             if self.npc.hit_shuttlecock(self.shuttle):
+                # Update possession - shuttle now belongs to NPC
+                self.shuttle_in_possession = "npc"
+                
                 if self.npc.swing_type == "smash":
                     self.show_feedback("NPC SMASH!", (255, 100, 100))
                 elif self.npc.swing_type == "drop":
@@ -134,6 +150,9 @@ class BadmintonGame:
             
             # Check if shuttlecock hits the ground, goes out of bounds, or hits the net
             if self.shuttle.is_grounded() or self.shuttle.out_of_bounds:
+                # Reset shuttle possession
+                self.shuttle_in_possession = "none"
+                
                 # Award point based on where the fault occurred
                 if self.shuttle.is_grounded():
                     # Point goes to opposite side of where shuttlecock landed
@@ -142,6 +161,14 @@ class BadmintonGame:
                         self.npc_score += 1
                         self.player_serves = False
                         self.show_feedback("Point for NPC!", RED)
+                        
+                        # Check if player loses a life
+                        if self.npc_score % 10 == 0:  # Lose a life every 10 points
+                            self.player_lives -= 1
+                            self.show_feedback(f"Player lost a life! Lives: {self.player_lives}", RED, 120)
+                            # Reset scores after life loss
+                            self.player_score = 0
+                            self.npc_score = 0
                     else:
                         # Point for player if shuttle lands in NPC's court
                         self.player_score += 1
@@ -155,31 +182,30 @@ class BadmintonGame:
                         self.npc_score += 1
                         self.player_serves = False
                         self.show_feedback("Out of bounds! Point for NPC", RED)
+                        
+                        # Check if player loses a life
+                        if self.npc_score % 10 == 0:  # Lose a life every 10 points
+                            self.player_lives -= 1
+                            self.show_feedback(f"Player lost a life! Lives: {self.player_lives}", RED, 120)
+                            # Reset scores after life loss
+                            self.player_score = 0
+                            self.npc_score = 0
                     else:
                         # Shuttle was moving left (toward player), so last hit by NPC
                         self.player_score += 1
                         self.player_serves = True
                         self.show_feedback("Out of bounds! Point for Player", BLUE)
                 
-                # Check if game has been won
-                winner = check_win_condition(self.player_score, self.npc_score)
-                if winner:
-                    # Add a game to the winner's total
-                    if winner == "Player":
-                        self.player_games += 1
-                        self.show_feedback("Player wins the game!", BLUE, 120)
-                    else:
-                        self.npc_games += 1
-                        self.show_feedback("NPC wins the game!", RED, 120)
-                    
-                    # Check if match has been won (best of 3)
-                    if self.player_games >= GAMES_TO_WIN_MATCH or self.npc_games >= GAMES_TO_WIN_MATCH:
+                # Check if match has been won due to lives
+                if self.player_lives <= 0:
+                    self.match_over = True
+                    self.show_feedback("Game Over! Player is out of lives!", RED, 120)
+                else:
+                    # Check if match has been won by score
+                    winner = check_win_condition(self.player_score, self.npc_score)
+                    if winner:
                         self.match_over = True
-                    else:
-                        # Reset for the next game
-                        self.player_score = 0
-                        self.npc_score = 0
-                        self.games_played += 1
+                        self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
                 
                 # Reset for next serve
                 self.game_state = SERVE_STATE
@@ -235,12 +261,14 @@ class BadmintonGame:
         # Draw shuttlecock
         self.shuttle.draw(self.screen)
         
-        # Draw scores and games
+        # Draw scores
         score_text = self.font.render(f"{self.player_score} - {self.npc_score}", True, BLACK)
         self.screen.blit(score_text, (WIDTH//2 - 30, 20))
         
-        games_text = self.font.render(f"Games: {self.player_games} - {self.npc_games}", True, BLACK)
-        self.screen.blit(games_text, (WIDTH//2 - 60, 60))
+        # Draw lives (hearts)
+        for i in range(self.player_lives):
+            pygame.draw.polygon(self.screen, BLUE, 
+                [(30 + i*25, 30), (40 + i*25, 20), (50 + i*25, 30), (40 + i*25, 45)])
         
         # Draw serve instructions
         if self.game_state == SERVE_STATE and self.player_serves and self.serving and not self.match_over:
@@ -256,11 +284,11 @@ class BadmintonGame:
         if getattr(self, 'show_controls', False):
             controls = [
                 "Controls:",
-                "Move: Arrow Left/Right",
-                "Jump: Space",
-                "Crouch: Down Arrow",
+                "Move Left/Right: Arrow Left/Right",
+                "Move Up/Down: Arrow Up/Down",
+                "Crouch: Down Arrow (when on ground)",
                 "Normal Shot: Z",
-                "Smash (while jumping): X",
+                "Smash (while in air): X",
                 "Drop Shot: C",
                 "Toggle Controls: H"
             ]
@@ -274,14 +302,19 @@ class BadmintonGame:
         # Draw badminton rules
         if self.game_state == SERVE_STATE and not getattr(self, 'show_controls', False):
             # Display compact rules at the bottom of the screen
-            display_message(self.screen, f"First to {POINTS_TO_WIN} wins. If {POINTS_TO_WIN-1}-{POINTS_TO_WIN-1}, win by {MIN_POINT_DIFFERENCE} points. If {MAX_SCORE-1}-{MAX_SCORE-1}, first to {MAX_SCORE} wins.", 
+            display_message(self.screen, f"First to {POINTS_TO_WIN} wins. Must win by {MIN_POINT_DIFFERENCE} clear points.", 
                            (50, HEIGHT - 40), 20)
         
         # Display match result if over
         if self.match_over:
-            winner = "Player" if self.player_games > self.npc_games else "NPC"
+            winner = "Player" if (self.player_score > self.npc_score or self.player_lives <= 0) else "NPC"
             display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
-            display_message(self.screen, f"Final score: {self.player_games}-{self.npc_games}", (WIDTH//2 - 100, HEIGHT//2), 36)
+            
+            if self.player_lives <= 0:
+                display_message(self.screen, "Player is out of lives!", (WIDTH//2 - 100, HEIGHT//2), 36)
+            else:
+                display_message(self.screen, f"Final score: {self.player_score}-{self.npc_score}", (WIDTH//2 - 100, HEIGHT//2), 36)
+                
             display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
         
         pygame.display.flip()
@@ -294,3 +327,47 @@ class BadmintonGame:
             self.draw()
         
         pygame.quit()
+
+    def reset_game(self, full_reset=False):
+        """Reset the game state after losing a life. 
+        If full_reset is True, reset everything including lives."""
+        
+        # Reset scores only on full reset
+        if full_reset:
+            self.player_score = 0
+            self.npc_score = 0
+            self.player_lives = 3
+            self.match_over = False
+        
+        # Reset game state
+        self.game_state = SERVE_STATE
+        
+        # Reset player positions
+        self.player.rect.x = 100
+        self.player.rect.y = 400
+        self.npc.rect.x = 600 
+        self.npc.rect.y = 400
+        
+        # Reset shuttlecock
+        self.shuttle.x = self.player.rect.centerx
+        self.shuttle.y = self.player.rect.top - 20
+        self.shuttle.vx = 0
+        self.shuttle.vy = 0
+        self.shuttle.out_of_bounds = False
+        self.shuttle.gravity_multiplier = 1.0
+        
+        # Reset serving state
+        self.serving = True
+        
+        # Randomly determine who serves
+        self.player_serves = random.choice([True, False])
+        
+        # Reset shuttle possession
+        self.shuttle_in_possession = "player" if self.player_serves else "npc"
+        
+        # Show feedback message
+        if not full_reset:
+            if self.player_lives > 0:
+                self.show_feedback("Get ready for the next round!", GREEN, 120)
+            else:
+                self.match_over = True

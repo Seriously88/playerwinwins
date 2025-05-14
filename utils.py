@@ -27,13 +27,12 @@ def display_message(surface, message, position=None, size=36, color=BLACK):
     
 def check_win_condition(player_score, npc_score):
     """
-    Check if a player has won the game based on official badminton rules
-    - First to 21 points wins
-    - If score is 20-20, side must win by 2 clear points
-    - If score reaches 29-29, first to 30 wins
+    Check if a player has won the game based on modified badminton rules
+    - First to 15 points wins
+    - If score is tied, side must win by 2 clear points
     """
-    if player_score >= POINTS_TO_WIN and (player_score - npc_score >= MIN_POINT_DIFFERENCE or player_score == MAX_SCORE):
+    if player_score >= POINTS_TO_WIN and (player_score - npc_score >= MIN_POINT_DIFFERENCE):
         return "Player"
-    elif npc_score >= POINTS_TO_WIN and (npc_score - player_score >= MIN_POINT_DIFFERENCE or npc_score == MAX_SCORE):
+    elif npc_score >= POINTS_TO_WIN and (npc_score - player_score >= MIN_POINT_DIFFERENCE):
         return "NPC"
     return None
