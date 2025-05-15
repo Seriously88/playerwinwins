@@ -13,6 +13,20 @@ class BadmintonGame:
         pygame.display.set_caption("Badminton Smash Game")
         self.clock = pygame.time.Clock()
         
+        # Initialize pygame mixer for sound
+        pygame.mixer.init()
+            
+        # Load and play background music
+        try:
+            pygame.mixer.music.load(BACKGROUND_MUSIC)
+            pygame.mixer.music.set_volume(MUSIC_VOLUME)
+            pygame.mixer.music.play(-1)  # -1 means loop indefinitely
+        except Exception as e:
+            print(f"Error loading background music: {e}")
+        
+        # Music state
+        self.music_playing = True
+        
         # Game state
         self.game_state = SERVE_STATE
         self.running = True
@@ -73,6 +87,10 @@ class BadmintonGame:
                     self.shuttle.vx = speed
                     self.shuttle.vy = SHUTTLE_INITIAL_VELOCITY * (1 + angle_variance)
                     
+                    # Play serve sound
+                    if self.hit_sound:
+                        pygame.mixer.Channel(0).play(self.hit_sound)
+                    
                     # Display serving feedback
                     self.show_feedback("Serve!", GREEN)
                 
@@ -83,6 +101,17 @@ class BadmintonGame:
                 # Display controls with H key
                 if event.key == pygame.K_h:
                     self.show_controls = not getattr(self, 'show_controls', False)
+                
+                # Toggle music with M key
+                if event.key == pygame.K_m:
+                    if self.music_playing:
+                        pygame.mixer.music.pause()
+                        self.music_playing = False
+                        self.show_feedback("Music Paused", CYAN, 60)
+                    else:
+                        pygame.mixer.music.unpause()
+                        self.music_playing = True
+                        self.show_feedback("Music Playing", CYAN, 60)
     
     def show_feedback(self, message, color=WHITE, duration=60):
         """Show a feedback message on screen for a duration in frames"""
@@ -134,6 +163,22 @@ class BadmintonGame:
                 # Update possession - shuttle now belongs to player
                 self.shuttle_in_possession = "player"
                 
+                # Play hit sound effect
+                if self.hit_sound:
+                    # Play the sound with pitch variation based on shot type
+                    pitch = 1.0  # Default pitch
+                    if self.player.swing_type == "smash":
+                        pitch = 1.2  # Higher pitch for smash
+                    elif self.player.swing_type == "drop":
+                        pitch = 0.8  # Lower pitch for drop shot
+                    
+                    # Use a channel to control pitch (pygame doesn't directly support pitch)
+                    # Instead, we play at normal pitch but use different volumes for shot types
+                    channel = pygame.mixer.find_channel()
+                    if channel:
+                        channel.set_volume(0.7 * (pitch if pitch > 1.0 else 1.0))
+                        channel.play(self.hit_sound)
+                
                 if self.player.swing_type == "smash":
                     self.show_feedback("SMASH!", (255, 0, 0))
                 elif self.player.swing_type == "drop":
@@ -145,6 +190,21 @@ class BadmintonGame:
             if self.npc.hit_shuttlecock(self.shuttle):
                 # Update possession - shuttle now belongs to NPC
                 self.shuttle_in_possession = "npc"
+                
+                # Play hit sound effect with different characteristics for NPC
+                if self.hit_sound:
+                    # Use slightly different pitch/volume for NPC hits
+                    pitch = 1.0  # Default pitch
+                    if self.npc.swing_type == "smash":
+                        pitch = 1.3  # Higher pitch for smash
+                    elif self.npc.swing_type == "drop":
+                        pitch = 0.9  # Lower pitch for drop shot
+                    
+                    # Use a channel to control volume
+                    channel = pygame.mixer.find_channel()
+                    if channel:
+                        channel.set_volume(0.6 * (pitch if pitch > 1.0 else 1.0))
+                        channel.play(self.hit_sound)
                 
                 if self.npc.swing_type == "smash":
                     self.show_feedback("NPC SMASH!", (255, 100, 100))
@@ -293,7 +353,8 @@ class BadmintonGame:
                 "Normal Shot: Z",
                 "Smash (while in air): X",
                 "Drop Shot: C",
-                "Toggle Controls: H"
+                "Toggle Controls: H",
+                "Toggle Music: M"
             ]
             
             control_y = HEIGHT - 200
@@ -341,6 +402,11 @@ class BadmintonGame:
             self.npc_score = 0
             self.player_lives = 3
             self.match_over = False
+            
+            # Restart background music if it was stopped
+            if not self.music_playing:
+                pygame.mixer.music.play(-1)
+                self.music_playing = True
         
         # Reset game state
         self.game_state = SERVE_STATE

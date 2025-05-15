@@ -51,3 +51,8 @@ COURT_IMAGE = "Group Assignment ISE/assests/badminton court.jpg"
 PLAYER_IMAGE = "Group Assignment ISE/assests/player.jpg"
 SHUTTLE_IMAGE = "Group Assignment ISE/assests/shuttlecock.jpg"
 NPC_IMAGE = "Group Assignment ISE/assests/npc.png"
+BACKGROUND_MUSIC = "Group Assignment ISE/assests/Davit Barqaia Tell My Why Remix by Awesome Free Sound Effects (online-audio-converter.com).wav"
+
+# Sound settings
+MUSIC_VOLUME = 0.3  # Background music volume (0.0 to 1.0)
+SFX_VOLUME = 0.7    # Sound effects volume (0.0 to 1.0)
