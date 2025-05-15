@@ -332,15 +332,16 @@ class BadmintonGame:
             self.screen.fill(WHITE)
             draw_court(self.screen)
         
-        # Draw net
-        pygame.draw.rect(self.screen, BLACK, (NET_X - 2, 0, 4, COURT_GROUND_Y))
+        # Draw net (simpler, just a line for better performance)
+        # pygame.draw.line(self.screen, BLACK, (NET_X, 0), (NET_X, COURT_GROUND_Y), 3)
         
         # Draw players
         self.player.draw(self.screen)
         self.npc.draw(self.screen)
         
-        # Draw shuttlecock
-        self.shuttle.draw(self.screen)
+        # Draw shuttlecock only if in play
+        if not self.serving or self.game_state == PLAY_STATE:
+            self.shuttle.draw(self.screen)
         
         # Draw scores
         score_text = self.font.render(f"{self.player_score} - {self.npc_score}", True, BLACK)
@@ -361,12 +362,12 @@ class BadmintonGame:
             text = feedback_font.render(self.feedback_message, True, self.feedback_color)
             self.screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - 150))
         
-        # Draw controls if requested
+        # Draw controls only when requested to avoid performance impact
         if getattr(self, 'show_controls', False):
             controls = [
                 "Controls:",
                 "Move Left/Right: Arrow Left/Right",
-                "Move Up/Down: Arrow Up/Down",
+                "Jump: Arrow Up",
                 "Crouch: Down Arrow (when on ground)",
                 "Normal Shot: Z",
                 "Smash (while in air): X",
@@ -374,6 +375,12 @@ class BadmintonGame:
                 "Toggle Controls: H",
                 "Toggle Music: M"
             ]
+            
+            # Draw a semi-transparent background for better readability
+            controls_surface = pygame.Surface((300, 225))
+            controls_surface.set_alpha(200)
+            controls_surface.fill((240, 240, 240))
+            self.screen.blit(controls_surface, (10, HEIGHT - 210))
             
             control_y = HEIGHT - 200
             for line in controls:

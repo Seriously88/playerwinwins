@@ -43,9 +43,8 @@ class Player:
             self.racket_rect.midright = (self.rect.left, self.rect.centery - 20)
 
     def handle_input(self, keys):
-        # Reset velocities
+        # Reset horizontal velocity
         self.velocity_x = 0
-        self.velocity_y = 0
         
         # Left/Right movement
         if keys[pygame.K_LEFT]:
@@ -55,15 +54,14 @@ class Player:
             self.velocity_x = SPRINT_SPEED if keys[pygame.K_LSHIFT] else WALK_SPEED
             self.facing_right = True
 
-        # Up/Down movement
-        if keys[pygame.K_UP]:
-            self.velocity_y = -WALK_SPEED
+        # Jump (only when on ground)
+        if keys[pygame.K_UP] and self.on_ground:
+            self.velocity_y = JUMP_STRENGTH
             self.on_ground = False
-        elif keys[pygame.K_DOWN]:
-            if self.on_ground:
+        
+        # Crouch
+        if keys[pygame.K_DOWN] and self.on_ground:
                 self.is_crouching = True
-            else:
-                self.velocity_y = WALK_SPEED
         else:
             self.is_crouching = False
         
@@ -176,10 +174,14 @@ class Player:
         return False
 
     def update(self):
+        # Apply gravity when not on ground
+        if not self.on_ground:
+            self.velocity_y += GRAVITY
+        
         # Apply horizontal movement
         self.rect.x += self.velocity_x
         
-        # Apply vertical movement (no gravity)
+        # Apply vertical movement with gravity
         self.rect.y += self.velocity_y
 
         # Keep player within screen bounds
@@ -201,6 +203,7 @@ class Player:
         if self.rect.bottom >= COURT_GROUND_Y:
             self.rect.bottom = COURT_GROUND_Y
             self.on_ground = True
+            self.velocity_y = 0
             
         # Ceiling collision
         if self.rect.top < 0:
@@ -249,40 +252,25 @@ class NPC(Player):
         
         # Tracking state
         self.is_tracking = False
-        self.shuttlecock_last_x = 0
-        self.shuttlecock_last_y = 0
+        self.in_hit_position = False
+        self.ready_to_hit = False
+        self.hit_window_counter = 0
+        self.position_strategy = "balanced"  # "offensive", "defensive", or "balanced"
+        
+        # Player tracking
         self.player_last_x = 0
         self.player_last_y = 0
         self.player_velocity_x = 0
         self.player_velocity_y = 0
-        
-        # Player tracking history (to detect patterns)
-        self.player_positions = []
+        self.player_positions = []  # Store recent player positions
+        self.max_player_positions = 10
         self.player_position_timer = 0
-        self.max_player_positions = 30  # Store the last 30 positions (half a second at 60 FPS)
-        
-        # Strategy variables
-        self.aim_for_corners = True  # Try to aim shots away from player
-        self.position_strategy = "center"  # "center", "defensive", "offensive"
-        self.strategy_timer = 0
-        
-        # Realistic hit variables
-        self.in_hit_position = False
-        self.hit_window = 20  # Frames in which NPC can hit the shuttlecock
-        self.hit_window_counter = 0
-        self.ready_to_hit = False
-        
-        # Load NPC image
-        try:
-            self.image = pygame.image.load(NPC_IMAGE)
-            self.image = pygame.transform.scale(self.image, (40, 80))
-        except Exception as e:
-            print(f"Error loading NPC image: {e}")
+        self.strategy_timer = 180
 
     def track_shuttlecock(self, shuttle, player=None):
         """AI logic to track and respond to shuttlecock, considers player position when available"""
-        # Reset vertical velocity
-        self.velocity_y = 0
+        # Reset tracking flag
+        self.is_tracking = True
         
         # Reset hit preparation flags if shuttle is not moving toward NPC's side
         if not (shuttle.vx > 0 and shuttle.x > NET_X):
@@ -301,315 +289,117 @@ class NPC(Player):
             self.player_last_x = player.rect.centerx
             self.player_last_y = player.rect.centery
             
-            # Record player position every few frames
+            # Record player position less frequently to reduce calculations
             self.player_position_timer += 1
-            if self.player_position_timer >= 5:  # Record every 5 frames
+            if self.player_position_timer >= 10:  # Reduced frequency (was 5)
                 self.player_positions.append((player.rect.centerx, player.rect.centery))
                 if len(self.player_positions) > self.max_player_positions:
                     self.player_positions.pop(0)  # Remove oldest position
                 self.player_position_timer = 0
             
-            # Update strategy periodically
+            # Update strategy less frequently
             self.strategy_timer -= 1
             if self.strategy_timer <= 0:
-                self.update_strategy(player, shuttle)
-                self.strategy_timer = 180  # Update strategy every 3 seconds
+                # Simplified strategy update
+                if player.rect.centerx < NET_X * 0.6:
+                    self.position_strategy = "offensive"
+                else:
+                    self.position_strategy = "defensive"
+                self.strategy_timer = 300  # Longer interval between updates (was 180)
         
-        # Check if shuttlecock is moving toward NPC's side of the court
+        # Determine if shuttlecock is moving toward NPC
         if shuttle.vx > 0 and shuttle.x > NET_X:
-            self.is_tracking = True
+            # Simplified prediction logic to reduce calculations
+            # Basic target calculation - move toward shuttlecock
+            target_x = shuttle.x + (shuttle.vx * 0.5)
             
-            # Track shuttlecock's last position for trajectory prediction
-            if abs(shuttle.x - self.shuttlecock_last_x) > 0:
-                self.shuttlecock_last_x = shuttle.x
-                self.shuttlecock_last_y = shuttle.y
+            # Constrain to right half of court
+            target_x = max(NET_X + 10, min(target_x, COURT_RIGHT - 50))
             
-            # Basic prediction of where shuttlecock will land
-            time_to_ground = (COURT_GROUND_Y - shuttle.y) / (shuttle.vy + 0.001)  # Avoid division by zero
-            predicted_x = shuttle.x + (shuttle.vx * time_to_ground)
-            
-            # Add some randomness/error based on difficulty
-            error_margin = (1.0 - self.accuracy) * 100
-            predicted_x += random.uniform(-error_margin, error_margin)
-            
-            # Constrain prediction to right side of court
-            predicted_x = max(NET_X + 50, min(predicted_x, COURT_RIGHT - 50))
-            
-            # Set target position (modified by strategy)
-            self.target_x = predicted_x
-            self.adjust_target_for_strategy(shuttle)
-            
-            # Move toward target horizontally with faster speed if further away
-            distance_to_target = abs(self.rect.centerx - self.target_x)
-            if distance_to_target > 20:
-                speed_multiplier = min(1.5, distance_to_target / 100)  # Faster if further away
-                movement_speed = WALK_SPEED * speed_multiplier
-                
-                if self.rect.centerx < self.target_x:
-                    self.velocity_x = movement_speed
+            # Determine if NPC should move horizontally
+            if abs(self.rect.centerx - target_x) > 40:
+                # Move toward target position
+                if self.rect.centerx < target_x:
+                    self.velocity_x = WALK_SPEED
                     self.facing_right = True
                 else:
-                    self.velocity_x = -movement_speed
+                    self.velocity_x = -WALK_SPEED
                     self.facing_right = False
+                
+                # Mark that we are not yet in position
+                self.in_hit_position = False
             else:
+                # We're in horizontal hitting position, slow down/stop
                 self.velocity_x = 0
-                # We're in position horizontally
                 self.in_hit_position = True
             
-            # Vertical movement based on shuttlecock height and predicted landing
-            if shuttle.vy > 0:  # Shuttlecock is falling
-                # Calculate ideal height to hit the shuttlecock
-                ideal_hit_height = shuttle.y - 30  # Slightly above the shuttlecock
+            # Simplified jumping logic
+            # Jump if shuttle is high and we're on ground
+            if shuttle.y < self.rect.top + 80 and self.on_ground and random.random() < 0.3:
+                self.velocity_y = JUMP_STRENGTH
+                self.on_ground = False
                 
-                # Move toward ideal height
-                if abs(self.rect.top - ideal_hit_height) > 15:
-                    if self.rect.top > ideal_hit_height:
-                        self.velocity_y = -WALK_SPEED
-                    else:
-                        self.velocity_y = WALK_SPEED
-                else:
-                    self.velocity_y = 0
-                    
-                    # Check if we're in position both horizontally and vertically
-                    if self.in_hit_position and abs(shuttle.x - self.rect.centerx) < 40:
-                        self.ready_to_hit = True
-                        
-                    # If ready to hit, start counting down hit window
-                    if self.ready_to_hit:
-                        self.hit_window_counter += 1
-                        
-                        # Only attempt hit within the hit window
-                        if self.hit_window_counter >= 5 and self.hit_window_counter <= self.hit_window:
-                            # Check if in ideal hitting position
-                            if self.is_in_hitting_range(shuttle):
-                                # Choose shot type based on situation and player position
-                                shot_type = self.choose_shot_type(shuttle)
-                                self.swing_racket(shot_type)
-                                self.decision_timer = self.reaction_time
-                                # Don't stop tracking after hitting - continue to follow the game
-                                self.ready_to_hit = False
-                                self.hit_window_counter = 0
-                                
-                        # If we missed the hit window, reset
-                        if self.hit_window_counter > self.hit_window:
-                            self.ready_to_hit = False
-                            self.hit_window_counter = 0
-            else:  # Shuttlecock is rising
-                # For rising shuttlecocks, just try to get into position
-                target_y = min(shuttle.y - 30, COURT_GROUND_Y - 80)  # Don't go below ground level
+            # Check if we're in a good position to hit
+            if self.in_hit_position:
+                self.ready_to_hit = True
+            
+            # Simplified hit decision
+            if self.is_in_hitting_range(shuttle):
+                shot_type = "normal"
+                if not self.on_ground:
+                    shot_type = "smash"
+                elif random.random() < 0.2:
+                    shot_type = "drop"
                 
-                if abs(self.rect.centery - target_y) > 20:
-                    vertical_speed = WALK_SPEED * 1.2
-                    if self.rect.centery > target_y:
-                        self.velocity_y = -vertical_speed
-                    else:
-                        self.velocity_y = vertical_speed
+                self.swing_racket(shot_type)
         else:
-            # Not actively tracking shuttlecock - track player instead
-            self.track_player()
-    
-    def track_player(self):
-        """When not tracking shuttlecock, track and respond to player movement"""
-        if self.player_last_x == 0:
-            # No player data yet, stay in default position
+            # If shuttle is not coming toward us, simplified player tracking
+            self.track_player_simple()
             self.is_tracking = False
-            self.velocity_x = 0
-            return
-            
-        # Basic mirror positioning - stay opposite to player
-        player_side_position = self.player_last_x / NET_X  # 0 to 1 position on player's side
+    
+    def track_player_simple(self):
+        """Simplified player tracking to reduce lag"""
+        # Default positions based on strategy
+        if self.position_strategy == "offensive":
+            target_x = NET_X + 150
+        else:
+            target_x = COURT_RIGHT - 150
         
-        # Mirror the player position to the NPC side, with adjustments
-        # If player is at 0.2 (left side of their court), NPC should be at 0.8 (right side of their court)
-        mirror_position = 1.0 - player_side_position  # Mirror position
-        
-        # Convert to actual x coordinate on NPC's side
-        target_x = NET_X + (mirror_position * (COURT_RIGHT - NET_X))
-        
-        # Add offset based on player's vertical position
-        if self.player_last_y < COURT_GROUND_Y - 200:
-            # Player is high up, prepare for potential smash by moving back
-            target_x = max(target_x, NET_X + (COURT_RIGHT - NET_X) * 0.7)
-        
-        # Adjust based on player velocity - anticipate movement
-        target_x += self.player_velocity_x * 2  # Predict where player will be
-        
-        # Ensure target is within NPC's court
-        target_x = max(NET_X + 50, min(target_x, COURT_RIGHT - 50))
-        
-        # Move toward mirrored position
-        distance_to_target = abs(self.rect.centerx - target_x)
-        if distance_to_target > 30:
-            # Move faster based on distance and player velocity
-            speed_factor = min(1.0, distance_to_target / 200 + abs(self.player_velocity_x) / 10)
-            movement_speed = WALK_SPEED * speed_factor
-            
+        # Move toward target position
+        if abs(self.rect.centerx - target_x) > 50:
+            # Move toward target
             if self.rect.centerx < target_x:
-                self.velocity_x = movement_speed
+                self.velocity_x = WALK_SPEED * 0.7
                 self.facing_right = True
             else:
-                self.velocity_x = -movement_speed
+                self.velocity_x = -WALK_SPEED * 0.7
                 self.facing_right = False
         else:
-            # Small side-to-side movement to look more natural
-            self.rect.x += self.direction * 1
-            if random.random() < 0.01:  # Occasionally change direction
+            # Stand still with occasional small movements
+            if random.random() < 0.03:
                 self.direction *= -1
                 self.facing_right = (self.direction > 0)
+            self.velocity_x = 0
         
-        # Vertical positioning - try to match player's height with offset
-        target_y = self.player_last_y
-        
-        # If player is jumping or crouching, adjust accordingly
-        if abs(self.player_velocity_y) > 2:
-            # Player is moving vertically - follow their movement
-            target_y += self.player_velocity_y
-        
-        # Constrain vertical position
-        target_y = max(100, min(target_y, COURT_GROUND_Y - 80))
-        
-        # Move toward target height
-        if abs(self.rect.centery - target_y) > 40:
-            if self.rect.centery > target_y:
-                self.velocity_y = -WALK_SPEED * 0.75
-            else:
-                self.velocity_y = WALK_SPEED * 0.75
+        # Occasionally jump
+        if random.random() < 0.003 and self.on_ground:
+            self.velocity_y = JUMP_STRENGTH
+            self.on_ground = False
     
     def is_in_hitting_range(self, shuttle):
         """Determine if the shuttlecock is in the ideal position to be hit"""
-        # Horizontal distance check
+        # Horizontal distance check (more important with side-view movement)
         x_distance = abs(shuttle.x - (self.rect.centerx + (30 if self.facing_right else -30)))
         
-        # Vertical position check - make sure the shuttlecock is at racket height
+        # Vertical position check relative to racket position
         racket_y = self.rect.centery - 20  # Approximate racket position
         y_distance = abs(shuttle.y - racket_y)
         
-        # Height check - don't hit if too high or too low
-        height_good = shuttle.y > self.rect.top and shuttle.y < self.rect.bottom
+        # Height check - expanded to account for limited vertical movement
+        height_good = shuttle.y > self.rect.top - 30 and shuttle.y < self.rect.bottom + 30
         
         # Check if we're in a good position to hit
-        return x_distance < 40 and y_distance < 30 and height_good
-    
-    def update_strategy(self, player, shuttle):
-        """Update the NPC's strategy based on game state and player patterns"""
-        player_x = player.rect.centerx
-        
-        # Analyze player position patterns
-        if len(self.player_positions) > 10:
-            # Check if player tends to stay in certain areas
-            left_count = sum(1 for x, _ in self.player_positions if x < NET_X * 0.3)
-            center_count = sum(1 for x, _ in self.player_positions if NET_X * 0.3 <= x <= NET_X * 0.7)
-            right_count = sum(1 for x, _ in self.player_positions if x > NET_X * 0.7)
-            
-            total = len(self.player_positions)
-            left_percent = left_count / total
-            center_percent = center_count / total
-            right_percent = right_count / total
-            
-            # If player spends a lot of time in one area, target the opposite
-            if left_percent > 0.6:
-                self.position_strategy = "offensive"  # Player stays left, move close to net
-            elif right_percent > 0.6:
-                self.position_strategy = "defensive"  # Player stays right, move back
-            else:
-                # More dynamic positioning based on current position
-                if player_x < NET_X * 0.6:  # Player is deep in their court
-                    self.position_strategy = "offensive"  # Move closer to the net
-                elif player_x > NET_X * 0.9:  # Player is near the net
-                    self.position_strategy = "defensive"  # Move back to defend
-                else:
-                    self.position_strategy = "center"  # Stay in the center
-        else:
-            # Not enough position data yet, use current position
-            if player_x < NET_X * 0.6:  # Player is deep in their court
-                self.position_strategy = "offensive"  # Move closer to the net
-            elif player_x > NET_X * 0.9:  # Player is near the net
-                self.position_strategy = "defensive"  # Move back to defend
-            else:
-                self.position_strategy = "center"  # Stay in the center
-        
-        # Randomly decide whether to aim for corners
-        self.aim_for_corners = random.random() < 0.7  # 70% chance to aim for corners
-        
-        # Adjust hit window based on difficulty
-        self.hit_window = int(15 + 15 * (1 - self.difficulty))  # Harder difficulty = smaller hit window
-    
-    def adjust_target_for_strategy(self, shuttle):
-        """Adjust target position based on current strategy"""
-        if self.position_strategy == "offensive":
-            # Move closer to the net when being offensive
-            self.target_x = min(self.target_x, NET_X + 150)
-        elif self.position_strategy == "defensive":
-            # Stay farther back when being defensive
-            self.target_x = max(self.target_x, COURT_RIGHT - 150)
-        # Center strategy uses the default predicted position
-    
-    def should_attempt_hit(self, shuttle):
-        """Determine if NPC should attempt to hit the shuttlecock"""
-        # Basic distance check
-        distance = abs(shuttle.x - self.rect.centerx)
-        
-        # Check if shuttlecock is at a reasonable height
-        height_good = abs(shuttle.y - self.rect.centery) < 100
-        
-        # More likely to attempt hit if NPC is facing the right direction
-        direction_good = (shuttle.x > self.rect.centerx and self.facing_right) or \
-                        (shuttle.x < self.rect.centerx and not self.facing_right)
-        
-        return distance < 80 and (height_good or direction_good)
-    
-    def choose_shot_type(self, shuttle):
-        """Choose the most strategic shot type based on situation"""
-        # If player is not tracked, use default logic
-        if self.player_last_x == 0:
-            if not self.on_ground and shuttle.y < self.rect.centery:
-                return "smash"
-            elif shuttle.y > self.rect.centery and random.random() < 0.3:
-                return "drop"
-            else:
-                return "normal"
-        
-        # Choose shot strategically based on player position
-        player_near_net = self.player_last_x > NET_X * 0.8
-        player_far_back = self.player_last_x < NET_X * 0.5
-        
-        if not self.on_ground and shuttle.y < self.rect.centery:
-            # Good position for a smash
-            return "smash"
-        elif player_near_net and random.random() < 0.7:
-            # If player is near the net, use a lob or smash to push them back
-            return "normal" if random.random() < 0.5 else "smash"
-        elif player_far_back and random.random() < 0.7:
-            # If player is far back, use a drop shot
-            return "drop"
-        else:
-            # Default to normal shots with occasional variation
-            shot_choices = ["normal", "drop", "smash"]
-            weights = [0.7, 0.15, 0.15]
-            return random.choices(shot_choices, weights=weights)[0]
-    
-    def hit_shuttlecock(self, shuttle):
-        """Override parent method to add strategic aiming"""
-        if not super().hit_shuttlecock(shuttle):
-            return False
-        
-        # Strategic aiming based on player position (modifies the shuttle velocity after hit)
-        if self.player_last_x > 0 and self.aim_for_corners:
-            # Player is being tracked, aim away from them
-            player_y = self.player_last_y
-            
-            # Aim for the opposite corner from player
-            if player_y < COURT_GROUND_Y - 200:  # Player is higher up
-                # Aim for the bottom corner
-                shuttle.vy = -5  # Lower arc
-            else:
-                # Aim for the top corner
-                shuttle.vy = -10  # Higher arc
-            
-            # Add slight horizontal adjustment
-            shuttle.vx += random.uniform(-1, 1)
-        
-        return True
+        return x_distance < 50 and y_distance < 60 and height_good
     
     def update(self):
         # Decrement timers
@@ -651,11 +441,10 @@ class NPC(Player):
                     self.direction *= -1
                     self.facing_right = (self.direction > 0)
             
-            # Random vertical movement
-            self.jump_timer += 1
-            if self.jump_timer > 120:
-                self.velocity_y = random.choice([-WALK_SPEED, WALK_SPEED]) * 0.5
-                self.jump_timer = 0
+            # Random jumps when idle
+            if random.random() < 0.005 and self.on_ground:
+                self.velocity_y = JUMP_STRENGTH
+                self.on_ground = False
         
         # Let parent class handle standard movement physics
         super().update()

@@ -7,7 +7,7 @@ def draw_court(surface):
     pygame.draw.rect(surface, BLACK, (COURT_LEFT, 0, COURT_RIGHT - COURT_LEFT, COURT_GROUND_Y), 2)
     
     # Draw net
-    pygame.draw.line(surface, BLACK, (NET_X, 0), (NET_X, COURT_GROUND_Y), 2)
+    # pygame.draw.line(surface, BLACK, (NET_X, 0), (NET_X, COURT_GROUND_Y), 2)
     
     # Draw ground line
     pygame.draw.line(surface, BLACK, (COURT_LEFT, COURT_GROUND_Y), (COURT_RIGHT, COURT_GROUND_Y), 2)

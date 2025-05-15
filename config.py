@@ -47,13 +47,13 @@ DROP_SHOT_SPEED = 4
 SHOT_COOLDOWN = 30
 
 # Asset paths
-COURT_IMAGE = "Group Assignment ISE/assests/badminton court.jpg"
-PLAYER_IMAGE = "Group Assignment ISE/assests/player.jpg"
-SHUTTLE_IMAGE = "Group Assignment ISE/assests/shuttlecock.jpg"
-NPC_IMAGE = "Group Assignment ISE/assests/npc.png"
-HIT_SOUND = "Group Assignment ISE/assests/BADMINTON SOUND EFFECT IN HIGH QUALITY.mp4"
-BACKGROUND_MUSIC = "Group Assignment ISE/assests/Davit Barqaia Tell My Why Remix by Awesome Free Sound Effects (online-audio-converter.com).wav"
-GAME_OVER_SOUND = "Group Assignment ISE/assests/Game Over _ 01 - ASMR - Free Sound Effects (online-audio-converter.com).wav"
+COURT_IMAGE = "assests/Badminton court.png"
+PLAYER_IMAGE = "assests/player.jpg"
+SHUTTLE_IMAGE = "assests/shuttlecock.jpg"
+NPC_IMAGE = "assests/npc.png"
+HIT_SOUND = "assests/BADMINTON SOUND EFFECT IN HIGH QUALITY.mp4"
+BACKGROUND_MUSIC = "assests/Davit Barqaia Tell My Why Remix by Awesome Free Sound Effects (online-audio-converter.com).wav"
+GAME_OVER_SOUND = "assests/Game Over _ 01 - ASMR - Free Sound Effects (online-audio-converter.com).wav"
 
 # Sound settings
 MUSIC_VOLUME = 0.3  # Background music volume (0.0 to 1.0)
