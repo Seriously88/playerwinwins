@@ -452,7 +452,7 @@ class NPC(Player):
                 self.facing_right = False
         else:
             # Small side-to-side movement to look more natural
-            self.velocity_x = self.direction * 1
+            self.rect.x += self.direction * 1
             if random.random() < 0.01:  # Occasionally change direction
                 self.direction *= -1
                 self.facing_right = (self.direction > 0)
