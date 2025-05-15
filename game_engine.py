@@ -32,6 +32,14 @@ class BadmintonGame:
         except Exception as e:
             print(f"Error loading game over sound: {e}")
             self.game_over_sound = None
+            
+        # Load victory sound
+        try:
+            self.victory_sound = pygame.mixer.Sound(VICTORY_SOUND)
+            self.victory_sound.set_volume(SFX_VOLUME * 1.2)  # Slightly louder
+        except Exception as e:
+            print(f"Error loading victory sound: {e}")
+            self.victory_sound = None
         
         # Load and play background music
         try:
@@ -44,6 +52,7 @@ class BadmintonGame:
         # Music state
         self.music_playing = True
         self.game_over_played = False
+        self.victory_played = False
         
         # Game state
         self.game_state = SERVE_STATE
@@ -396,11 +405,25 @@ class BadmintonGame:
         
         # Display match result if over
         if self.match_over:
-            winner = "Player" if (self.player_score > self.npc_score or self.player_lives <= 0) else "NPC"
+            winner = "Player" if (self.player_score > self.npc_score and self.player_lives > 0) else "NPC"
             display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
             
-            # Play game over sound if player wins and it hasn't been played yet
-            if winner == "Player" and self.game_over_sound and not self.game_over_played:
+            # Play victory sound if player wins and it hasn't been played yet
+            if winner == "Player" and self.victory_sound and not self.victory_played:
+                # Temporarily lower background music volume
+                if self.music_playing:
+                    current_volume = pygame.mixer.music.get_volume()
+                    pygame.mixer.music.set_volume(current_volume * 0.3)  # Lower to 30% of current volume
+                
+                # Play victory sound
+                pygame.mixer.Channel(1).play(self.victory_sound)
+                self.victory_played = True
+                
+                # Schedule restoring music volume after sound finishes
+                self.volume_restore_timer = int(self.victory_sound.get_length() * 60)  # Convert seconds to frames
+            
+            # Play game over sound if NPC wins and it hasn't been played yet
+            elif winner == "NPC" and self.game_over_sound and not self.game_over_played:
                 # Temporarily lower background music volume
                 if self.music_playing:
                     current_volume = pygame.mixer.music.get_volume()
@@ -411,7 +434,6 @@ class BadmintonGame:
                 self.game_over_played = True
                 
                 # Schedule restoring music volume after sound finishes
-                # Done by setting a timer that checks in the update method
                 self.volume_restore_timer = int(self.game_over_sound.get_length() * 60)  # Convert seconds to frames
             
             if self.player_lives <= 0:
@@ -443,6 +465,7 @@ class BadmintonGame:
             self.player_lives = 3
             self.match_over = False
             self.game_over_played = False  # Reset sound flag
+            self.victory_played = False    # Reset victory sound flag
             
             # Restart background music if it was stopped
             if not self.music_playing:

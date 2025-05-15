@@ -54,6 +54,7 @@ NPC_IMAGE = "assests/npc.png"
 HIT_SOUND = "assests/BADMINTON SOUND EFFECT IN HIGH QUALITY.mp4"
 BACKGROUND_MUSIC = "assests/Davit Barqaia Tell My Why Remix by Awesome Free Sound Effects (online-audio-converter.com).wav"
 GAME_OVER_SOUND = "assests/Game Over _ 01 - ASMR - Free Sound Effects (online-audio-converter.com).wav"
+VICTORY_SOUND = "assests/Victory Sound Effect.wav"
 
 # Sound settings
 MUSIC_VOLUME = 0.3  # Background music volume (0.0 to 1.0)
