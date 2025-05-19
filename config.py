@@ -49,6 +49,7 @@ SHOT_COOLDOWN = 30
 # Asset paths
 COURT_IMAGE = "assests/Badminton court.png"
 PLAYER_IMAGE = "assests/player.jpg"
+PLAYER_ANIMATION_DIR = "assests/player_animation_improved"
 SHUTTLE_IMAGE = "assests/shuttlecock.jpg"
 NPC_IMAGE = "assests/npc.png"
 HIT_SOUND = "assests/hit sound effects.WAV"
@@ -59,3 +60,6 @@ VICTORY_SOUND = "assests/Victory Sound Effect.wav"
 # Sound settings
 MUSIC_VOLUME = 0.3  # Background music volume (0.0 to 1.0)
 SFX_VOLUME = 0.7    # Sound effects volume (0.0 to 1.0)
+
+# Animation settings
+ANIMATION_FRAME_RATE = 10  # Frames per second for animations

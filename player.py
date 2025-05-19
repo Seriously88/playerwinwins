@@ -1,6 +1,7 @@
 import pygame
 import random
 from config import *
+from player_animation import PlayerAnimation
 
 GRAVITY = 0.5
 JUMP_STRENGTH = -10
@@ -14,8 +15,11 @@ class Player:
         self.velocity_y = 0
         self.velocity_x = 0
         self.on_ground = True
-        self.image = None
         self.facing_right = True
+        
+        # Animation system
+        self.animation = PlayerAnimation()
+        self.animation_state = "idle"
         
         # Player state
         self.is_crouching = False
@@ -28,19 +32,18 @@ class Player:
         self.racket_rect = pygame.Rect(0, 0, 30, 20)
         self.update_racket_position()
         
-        # Try to load player image
-        try:
-            self.image = pygame.image.load(PLAYER_IMAGE)
-            self.image = pygame.transform.scale(self.image, (40, 80))
-        except:
-            pass
+        # Create racket visuals
+        self.racket_color = (220, 180, 50)  # Yellow racket color
+        self.racket_swing_color = (255, 100, 0)  # Orange when swinging
+        self.racket_frame_color = (50, 50, 50)  # Dark gray for racket frame
+        self.racket_strings_color = (240, 240, 240)  # White for racket strings
 
     def update_racket_position(self):
         """Update the racket position based on player position and facing direction"""
         if self.facing_right:
-            self.racket_rect.midleft = (self.rect.right, self.rect.centery - 20)
+            self.racket_rect.midleft = (self.rect.right - 10, self.rect.centery - 20)
         else:
-            self.racket_rect.midright = (self.rect.left, self.rect.centery - 20)
+            self.racket_rect.midright = (self.rect.left + 10, self.rect.centery - 20)
 
     def handle_input(self, keys):
         # Reset horizontal velocity
@@ -50,18 +53,26 @@ class Player:
         if keys[pygame.K_LEFT]:
             self.velocity_x = -SPRINT_SPEED if keys[pygame.K_LSHIFT] else -WALK_SPEED
             self.facing_right = False
-        if keys[pygame.K_RIGHT]:
+            if self.on_ground and not self.is_swinging:
+                self.animation_state = "run"
+        elif keys[pygame.K_RIGHT]:
             self.velocity_x = SPRINT_SPEED if keys[pygame.K_LSHIFT] else WALK_SPEED
             self.facing_right = True
+            if self.on_ground and not self.is_swinging:
+                self.animation_state = "run"
+        elif self.on_ground and not self.is_swinging:
+            self.animation_state = "idle"
 
         # Jump (only when on ground)
         if keys[pygame.K_UP] and self.on_ground:
             self.velocity_y = JUMP_STRENGTH
             self.on_ground = False
+            self.animation_state = "jump"
         
         # Crouch
         if keys[pygame.K_DOWN] and self.on_ground:
-                self.is_crouching = True
+            self.is_crouching = True
+            self.animation_state = "crouch"
         else:
             self.is_crouching = False
         
@@ -82,12 +93,15 @@ class Player:
             # Normal swing
             if keys[pygame.K_z]:
                 self.swing_racket("normal")
+                self.animation_state = "swing"
             # Smash (while in air)
             elif keys[pygame.K_x] and not self.on_ground:
                 self.swing_racket("smash")
+                self.animation_state = "smash"
             # Drop shot
             elif keys[pygame.K_c]:
                 self.swing_racket("drop")
+                self.animation_state = "swing"
 
     def swing_racket(self, swing_type):
         """Perform a racket swing of the specified type"""
@@ -205,6 +219,10 @@ class Player:
             self.on_ground = True
             self.velocity_y = 0
             
+            # Reset to idle animation if we were jumping
+            if self.animation_state == "jump" and not self.is_swinging:
+                self.animation_state = "idle"
+            
         # Ceiling collision
         if self.rect.top < 0:
             self.rect.top = 0
@@ -216,24 +234,79 @@ class Player:
         # Reset swing state after cooldown
         if self.swing_cooldown <= 0:
             self.is_swinging = False
+            
+        # Update animation
+        self.animation.set_animation(self.animation_state)
+        self.animation.update(1/60)  # Assuming 60 FPS
+        
+        # If a non-looping animation is finished, go back to idle
+        if self.animation.is_finished() and self.animation_state in ["swing", "smash"]:
+            self.animation_state = "idle" if self.on_ground else "jump"
 
     def draw(self, surface):
-        # Draw player
-        if self.image:
-            # Flip image if facing left
-            img = pygame.transform.flip(self.image, not self.facing_right, False)
-            
-            # Adjust image when crouching
-            if self.is_crouching:
-                img = pygame.transform.scale(img, (self.rect.width, self.rect.height))
-                
-            surface.blit(img, self.rect)
-        else:
-            pygame.draw.rect(surface, self.color, self.rect)
+        # Draw player animation
+        self.animation.draw(surface, self.rect.centerx, self.rect.bottom, not self.facing_right)
         
-        # Draw racket (for debugging, could be replaced with racket sprite)
-        racket_color = (220, 180, 50) if not self.is_swinging else (255, 100, 0)
-        pygame.draw.rect(surface, racket_color, self.racket_rect)
+        # Draw racket separately since we removed it from the sprite
+        racket_color = self.racket_swing_color if self.is_swinging else self.racket_color
+        
+        # Draw badminton racket
+        if self.facing_right:
+            # Draw racket handle
+            handle_rect = pygame.Rect(
+                self.racket_rect.left + 5,
+                self.racket_rect.centery,
+                10,
+                20
+            )
+            pygame.draw.rect(surface, (139, 69, 19), handle_rect)  # Brown handle
+            
+            # Draw racket head (outer frame)
+            pygame.draw.ellipse(surface, self.racket_frame_color, self.racket_rect, 3)
+            
+            # Draw racket head (inner part with strings)
+            inner_rect = self.racket_rect.inflate(-6, -6)
+            pygame.draw.ellipse(surface, self.racket_strings_color, inner_rect)
+            
+            # Draw racket strings (vertical)
+            for x in range(inner_rect.left + 3, inner_rect.right, 4):
+                pygame.draw.line(surface, self.racket_frame_color, 
+                                (x, inner_rect.top + 2), 
+                                (x, inner_rect.bottom - 2), 1)
+            
+            # Draw racket strings (horizontal)
+            for y in range(inner_rect.top + 3, inner_rect.bottom, 4):
+                pygame.draw.line(surface, self.racket_frame_color, 
+                                (inner_rect.left + 2, y), 
+                                (inner_rect.right - 2, y), 1)
+        else:
+            # Draw racket handle
+            handle_rect = pygame.Rect(
+                self.racket_rect.right - 15,
+                self.racket_rect.centery,
+                10,
+                20
+            )
+            pygame.draw.rect(surface, (139, 69, 19), handle_rect)  # Brown handle
+            
+            # Draw racket head (outer frame)
+            pygame.draw.ellipse(surface, self.racket_frame_color, self.racket_rect, 3)
+            
+            # Draw racket head (inner part with strings)
+            inner_rect = self.racket_rect.inflate(-6, -6)
+            pygame.draw.ellipse(surface, self.racket_strings_color, inner_rect)
+            
+            # Draw racket strings (vertical)
+            for x in range(inner_rect.left + 3, inner_rect.right, 4):
+                pygame.draw.line(surface, self.racket_frame_color, 
+                                (x, inner_rect.top + 2), 
+                                (x, inner_rect.bottom - 2), 1)
+            
+            # Draw racket strings (horizontal)
+            for y in range(inner_rect.top + 3, inner_rect.bottom, 4):
+                pygame.draw.line(surface, self.racket_frame_color, 
+                                (inner_rect.left + 2, y), 
+                                (inner_rect.right - 2, y), 1)
 
 
 class NPC(Player):
