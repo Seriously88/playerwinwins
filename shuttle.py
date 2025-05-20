@@ -4,7 +4,7 @@ from config import *
 
 class Shuttlecock:
     def __init__(self, x, y):
-        self.radius = 10
+        self.radius = 16  # Increased from 10 to 16
         self.x = x
         self.y = y
         self.vx = random.choice([-5, 5])
@@ -18,7 +18,7 @@ class Shuttlecock:
         # Try to load shuttlecock image
         try:
             self.image = pygame.image.load(SHUTTLE_IMAGE)
-            self.image = pygame.transform.scale(self.image, (20, 20))
+            self.image = pygame.transform.scale(self.image, (32, 32))  # Increased from 20x20 to 32x32
             # Pre-rotate images for common angles to avoid recalculating on every frame
             self.rotated_images = {}
         except:

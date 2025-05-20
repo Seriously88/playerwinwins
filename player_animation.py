@@ -6,7 +6,7 @@ class PlayerAnimation:
         # Animation properties
         self.frame_width = 32
         self.frame_height = 32
-        self.scale_factor = 2  # Scale sprites to be larger
+        self.scale_factor = 2.5  # Increased from 2 to 2.5 for larger sprites
         self.current_frame = 0
         self.animation_speed = 0.15  # How fast to cycle through frames
         self.animation_timer = 0
@@ -36,13 +36,13 @@ class PlayerAnimation:
     def load_animation_frames(self):
         """Load all animation frames from the player_animation_improved directory"""
         self.frames = []
-        animation_dir = "assests/player_animation_improved"
+        animation_dir = "assests\\player_BRRemove"
         
         # Check if directory exists
         if not os.path.exists(animation_dir):
             print(f"Warning: Animation directory '{animation_dir}' does not exist!")
             # Fall back to original directory if improved doesn't exist
-            animation_dir = "assests/player_animation"
+            animation_dir = "assests\\player_BRRemove"
             if not os.path.exists(animation_dir):
                 print(f"Warning: Fallback animation directory '{animation_dir}' does not exist either!")
                 return

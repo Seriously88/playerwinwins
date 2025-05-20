@@ -10,7 +10,7 @@ WALK_SPEED = 4
 
 class Player:
     def __init__(self, x, y, color):
-        self.rect = pygame.Rect(x, y, 40, 80)
+        self.rect = pygame.Rect(x, y, 50, 95)  # Increased from 40x80 to 50x95
         self.color = color
         self.velocity_y = 0
         self.velocity_x = 0
@@ -29,7 +29,7 @@ class Player:
         self.swing_type = None  # Can be "normal", "smash", or "drop"
         
         # Create racket hitbox (positioned relative to player)
-        self.racket_rect = pygame.Rect(0, 0, 30, 20)
+        self.racket_rect = pygame.Rect(0, 0, 25, 18)  # Made smaller than original 30x20
         self.update_racket_position()
         
         # Create racket visuals
@@ -120,9 +120,9 @@ class Player:
             
             # Expanding racket hitbox during swing for better hit detection
             if self.facing_right:
-                self.racket_rect.width = 40
+                self.racket_rect.width = 20
             else:
-                self.racket_rect.width = 40
+                self.racket_rect.width = 20
 
     def hit_shuttlecock(self, shuttle):
         """Handle shuttlecock hit with racket, return True if hit"""
