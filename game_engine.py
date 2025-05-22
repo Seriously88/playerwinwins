@@ -3,7 +3,9 @@ import random
 from config import *
 from player import Player, NPC
 from shuttle import Shuttlecock
+from coin import Coin
 from utils import draw_court, display_message, check_win_condition
+
 
 class BadmintonGame:
     def __init__(self):
@@ -59,6 +61,22 @@ class BadmintonGame:
         self.running = True
         self.match_over = False
         
+        # Coin system
+        self.coins = []
+        self.coin_count = 0
+        self.consecutive_wins = 0
+        
+        # Load coin sound
+        try:
+            self.coin_sound = pygame.mixer.Sound(COIN_SOUND)
+            self.coin_sound.set_volume(SFX_VOLUME)
+        except Exception as e:
+            print(f"Error loading coin sound: {e}")
+            self.coin_sound = None
+        
+        # Game state variables
+        self.showing_controls = False
+        
         # Lives system (only for player)
         self.player_lives = 3
         
@@ -101,6 +119,8 @@ class BadmintonGame:
             
             # Handle key presses
             if event.type == pygame.KEYDOWN:
+
+                
                 # Serve with spacebar
                 if self.game_state == SERVE_STATE and event.key == pygame.K_SPACE and self.player_serves and not self.match_over and self.serving:
                     # Set initial velocity for proper animation instead of teleporting
@@ -127,7 +147,7 @@ class BadmintonGame:
                 
                 # Display controls with H key
                 if event.key == pygame.K_h:
-                    self.show_controls = not getattr(self, 'show_controls', False)
+                    self.showing_controls = not self.showing_controls
                 
                 # Toggle music with M key
                 if event.key == pygame.K_m:
@@ -156,6 +176,9 @@ class BadmintonGame:
         
         # Update players
         self.player.update()
+        
+        # Update and check coin collection
+        self.update_coins()
         
         # Track shuttlecock crossing from player to NPC side
         if self.shuttle.vx > 0 and self.shuttle.x > NET_X:
@@ -264,6 +287,14 @@ class BadmintonGame:
                         self.player_score += 1
                         self.player_serves = True
                         self.show_feedback("Point for Player!", BLUE)
+                        
+                        # Track consecutive player wins for coin spawning
+                        self.consecutive_wins += 1
+                        
+                        # Spawn coins after two consecutive wins
+                        if self.consecutive_wins >= 2:
+                            self.spawn_coins(3)  # Spawn 3 coins
+                            self.consecutive_wins = 0  # Reset counter
                 elif self.shuttle.out_of_bounds:
                     # Point goes to the side that didn't hit it last
                     # We'll determine this based on the direction the shuttle was moving
@@ -285,6 +316,14 @@ class BadmintonGame:
                         self.player_score += 1
                         self.player_serves = True
                         self.show_feedback("Out of bounds! Point for Player", BLUE)
+                        
+                        # Track consecutive player wins for coin spawning
+                        self.consecutive_wins += 1
+                        
+                        # Spawn coins after two consecutive wins
+                        if self.consecutive_wins >= 2:
+                            self.spawn_coins(3)  # Spawn 3 coins
+                            self.consecutive_wins = 0  # Reset counter
                 
                 # Check if match has been won due to lives
                 if self.player_lives <= 0:
@@ -296,6 +335,10 @@ class BadmintonGame:
                     if winner:
                         self.match_over = True
                         self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
+                        
+                        # Player victory event
+                        if winner == "Player":
+                            pass  # No video cutscene
                 
                 # Reset for next serve
                 self.game_state = SERVE_STATE
@@ -334,6 +377,8 @@ class BadmintonGame:
                 self.shuttle.y = self.npc.rect.top - 20
     
     def draw(self):
+        
+        # Normal game rendering
         # Fill background
         if self.court_img:
             self.screen.blit(self.court_img, (0, 0))
@@ -351,6 +396,10 @@ class BadmintonGame:
         # Draw shuttlecock only if in play
         if not self.serving or self.game_state == PLAY_STATE:
             self.shuttle.draw(self.screen)
+            
+        # Draw all coins
+        for coin in self.coins:
+            coin.draw(self.screen)
         
         # Draw scores
         score_text = self.font.render(f"{self.player_score} - {self.npc_score}", True, BLACK)
@@ -360,6 +409,10 @@ class BadmintonGame:
         for i in range(self.player_lives):
             pygame.draw.polygon(self.screen, BLUE, 
                 [(30 + i*25, 30), (40 + i*25, 20), (50 + i*25, 30), (40 + i*25, 45)])
+                
+        # Draw coin count below lives
+        coin_text = self.font.render(f"Coins: {self.coin_count}", True, YELLOW)
+        self.screen.blit(coin_text, (30, 55))  # Position below the hearts
         
         # Draw serve instructions
         if self.game_state == SERVE_STATE and self.player_serves and self.serving and not self.match_over:
@@ -372,7 +425,7 @@ class BadmintonGame:
             self.screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - 150))
         
         # Draw controls only when requested to avoid performance impact
-        if getattr(self, 'show_controls', False):
+        if self.showing_controls:
             controls = [
                 "Controls:",
                 "Move Left/Right: Arrow Left/Right",
@@ -398,7 +451,7 @@ class BadmintonGame:
                 control_y += 25
         
         # Draw badminton rules
-        if self.game_state == SERVE_STATE and not getattr(self, 'show_controls', False):
+        if self.game_state == SERVE_STATE and not self.showing_controls:
             # Display compact rules at the bottom of the screen
             display_message(self.screen, f"First to {POINTS_TO_WIN} wins. Must win by {MIN_POINT_DIFFERENCE} clear points.", 
                            (50, HEIGHT - 40), 20)
@@ -408,19 +461,24 @@ class BadmintonGame:
             winner = "Player" if (self.player_score > self.npc_score and self.player_lives > 0) else "NPC"
             display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
             
-            # Play victory sound if player wins and it hasn't been played yet
-            if winner == "Player" and self.victory_sound and not self.victory_played:
+            # Play victory sound and start cutscene if player wins and it hasn't been played yet
+            if winner == "Player" and not self.victory_played:
                 # Temporarily lower background music volume
                 if self.music_playing:
                     current_volume = pygame.mixer.music.get_volume()
                     pygame.mixer.music.set_volume(current_volume * 0.3)  # Lower to 30% of current volume
                 
-                # Play victory sound
-                pygame.mixer.Channel(1).play(self.victory_sound)
+                # Play victory sound if available
+                if self.victory_sound:
+                    pygame.mixer.Channel(1).play(self.victory_sound)
+                
                 self.victory_played = True
                 
+
+                
                 # Schedule restoring music volume after sound finishes
-                self.volume_restore_timer = int(self.victory_sound.get_length() * 60)  # Convert seconds to frames
+                if self.victory_sound:
+                    self.volume_restore_timer = int(self.victory_sound.get_length() * 60)  # Convert seconds to frames
             
             # Play game over sound if NPC wins and it hasn't been played yet
             elif winner == "NPC" and self.game_over_sound and not self.game_over_played:
@@ -467,6 +525,10 @@ class BadmintonGame:
             self.game_over_played = False  # Reset sound flag
             self.victory_played = False    # Reset victory sound flag
             
+            # Reset coin system on full game reset
+            self.consecutive_wins = 0
+            # Don't reset coin_count to preserve player's collection
+            
             # Restart background music if it was stopped
             if not self.music_playing:
                 pygame.mixer.music.play(-1)
@@ -507,3 +569,41 @@ class BadmintonGame:
                 self.show_feedback("Get ready for the next round!", GREEN, 120)
             else:
                 self.match_over = True
+
+    def update_coins(self):
+        """Update coins and check for player collection"""
+        # Update all coin animations
+        for coin in self.coins:
+            coin.update()
+            
+        # Check for coin collection
+        for coin in self.coins:
+            if not coin.collected and coin.collides_with_player(self.player.rect):
+                # Collect the coin
+                coin.collect()
+                self.coin_count += 1
+                
+                # Play coin sound
+                if self.coin_sound:
+                    pygame.mixer.Channel(2).play(self.coin_sound)
+                
+                # Show feedback
+                self.show_feedback(f"Coin Collected! Total: {self.coin_count}", YELLOW, 60)
+        
+        # Remove collected coins after a delay
+        self.coins = [coin for coin in self.coins if not coin.collected]
+    
+    def spawn_coins(self, count=3):
+        """Spawn coins randomly on the player's side of court"""
+        for _ in range(count):
+            # Randomize position only on player's side (left of the net)
+            x = random.randint(COURT_LEFT + 50, NET_X - 70)
+            
+            # Start coins high up for floating down effect
+            y = random.randint(50, 150)
+                
+            # Create and add the coin
+            self.coins.append(Coin(x, y))
+            
+        # Show feedback
+        self.show_feedback("Coins Spawned!", YELLOW, 60)

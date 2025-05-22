@@ -56,6 +56,8 @@ HIT_SOUND = "assests/hit sound effects.WAV"
 BACKGROUND_MUSIC = "assests/Davit Barqaia Tell My Why Remix by Awesome Free Sound Effects (online-audio-converter.com).wav"
 GAME_OVER_SOUND = "assests/Game Over _ 01 - ASMR - Free Sound Effects (online-audio-converter.com).wav"
 VICTORY_SOUND = "assests/Victory Sound Effect.wav"
+COIN_SOUND = "assests/coins.wav"
+COIN_IMAGE = "assests/collectcoins.png"
 
 # Sound settings
 MUSIC_VOLUME = 0.3  # Background music volume (0.0 to 1.0)
