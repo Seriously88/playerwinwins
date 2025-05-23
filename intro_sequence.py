@@ -1,0 +1,163 @@
+import pygame
+import cv2
+import numpy as np
+from config import WIDTH, HEIGHT, WHITE
+
+class IntroSequence:
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        pygame.display.set_caption("Badminton Smash Game - Intro")
+        self.clock = pygame.time.Clock()
+        self.running = True
+        
+        # Initialize pygame mixer for sound
+        pygame.mixer.init()
+        
+        # Load custom font
+        try:
+            self.button_font = pygame.font.Font('assests/PressStart2P-Regular.ttf', 20)  # Font for buttons
+        except Exception as e:
+            print(f"Error loading custom font: {e}")
+            self.button_font = pygame.font.SysFont(None, 32)  # Fallback font
+        
+        # Load transition video audio
+        try:
+            self.transition_audio = pygame.mixer.Sound('assests/transitionaudio.WAV')
+            self.transition_audio.set_volume(0.8)  # Set appropriate volume
+        except Exception as e:
+            print(f"Error loading transition audio: {e}")
+            self.transition_audio = None
+
+        # Load instruction scene
+        try:
+            self.instruction_scene = pygame.image.load('assests/instruction.png')
+            self.instruction_scene = pygame.transform.scale(self.instruction_scene, (WIDTH, HEIGHT))
+        except Exception as e:
+            print(f"Error loading instruction scene: {e}")
+            self.instruction_scene = None
+            
+        # Button properties - positioned under the instruction title
+        self.start_button_rect = pygame.Rect(WIDTH//2 - 150, 150, 300, 50)  # Made wider for pixel font
+        self.start_button_color = (0, 0, 0)  # Black
+        self.start_button_hover_color = (40, 40, 40)  # Dark gray for hover
+        self.start_button_text = self.button_font.render("Start Game", True, WHITE)
+        self.start_button_text_rect = self.start_button_text.get_rect(center=self.start_button_rect.center)
+        
+        # Skip button properties
+        self.skip_button_rect = pygame.Rect(WIDTH - 120, 20, 100, 40)  # Position in top right
+        self.skip_button_color = (0, 0, 0)  # Black
+        self.skip_button_hover_color = (40, 40, 40)  # Dark gray for hover
+        self.skip_button_text = self.button_font.render("Skip", True, WHITE)
+        self.skip_button_text_rect = self.skip_button_text.get_rect(center=self.skip_button_rect.center)
+
+    def play_video(self):
+        # Open the video file
+        video = cv2.VideoCapture('assests/introscene+BGM/transitionscene(1).mp4')
+        
+        if not video.isOpened():
+            print("Error loading video file")
+            return False
+            
+        # Play the audio
+        if self.transition_audio:
+            audio_channel = pygame.mixer.Channel(0)
+            audio_channel.play(self.transition_audio)
+            
+        while True:
+            ret, frame = video.read()
+            
+            if not ret:
+                break
+                
+            # Convert frame from BGR to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(frame, (WIDTH, HEIGHT))
+            
+            # Convert to pygame surface - remove rotation and fix orientation
+            frame = np.swapaxes(frame, 0, 1)
+            frame = pygame.surfarray.make_surface(frame)
+            
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    if self.transition_audio:
+                        pygame.mixer.Channel(0).stop()  # Stop audio on quit
+                    video.release()
+                    return False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        if self.transition_audio:
+                            pygame.mixer.Channel(0).stop()  # Stop audio on space key skip
+                        video.release()
+                        return True
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # Left click
+                        if self.skip_button_rect.collidepoint(event.pos):
+                            if self.transition_audio:
+                                pygame.mixer.Channel(0).stop()  # Stop audio on skip button click
+                            video.release()
+                            return True
+            
+            # Display frame
+            self.screen.blit(frame, (0, 0))
+            
+            # Draw skip button with hover effect and outline
+            mouse_pos = pygame.mouse.get_pos()
+            button_color = self.skip_button_hover_color if self.skip_button_rect.collidepoint(mouse_pos) else self.skip_button_color
+            pygame.draw.rect(self.screen, button_color, self.skip_button_rect, border_radius=5)
+            # Add white outline to make button visible against dark backgrounds
+            pygame.draw.rect(self.screen, WHITE, self.skip_button_rect, border_radius=5, width=2)
+            self.screen.blit(self.skip_button_text, self.skip_button_text_rect)
+            
+            pygame.display.flip()
+            self.clock.tick(30)
+            
+        video.release()
+        if self.transition_audio:
+            pygame.mixer.Channel(0).stop()  # Stop audio when video ends naturally
+        return True
+
+    def show_instructions(self):
+        showing_instructions = True
+        
+        while showing_instructions and self.running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return False
+                    
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # Left click
+                        if self.start_button_rect.collidepoint(event.pos):
+                            return True
+                            
+            # Draw instruction scene
+            if self.instruction_scene:
+                self.screen.blit(self.instruction_scene, (0, 0))
+            else:
+                self.screen.fill((0, 0, 0))
+            
+            # Draw start button with hover effect and outline
+            mouse_pos = pygame.mouse.get_pos()
+            button_color = self.start_button_hover_color if self.start_button_rect.collidepoint(mouse_pos) else self.start_button_color
+            pygame.draw.rect(self.screen, button_color, self.start_button_rect, border_radius=10)
+            # Add white outline to make button visible against dark backgrounds
+            pygame.draw.rect(self.screen, WHITE, self.start_button_rect, border_radius=10, width=2)
+            self.screen.blit(self.start_button_text, self.start_button_text_rect)
+            
+            pygame.display.flip()
+            self.clock.tick(60)
+            
+        return False
+
+    def run(self):
+        # Play intro video first
+        if not self.play_video():
+            return False
+            
+        # Show instruction scene
+        if not self.show_instructions():
+            return False
+            
+        return True 
