@@ -120,6 +120,25 @@ class BadmintonGame:
             print(f"Error loading crowd cheering sound: {e}")
             self.crowd_cheering = None
             
+        # Load cutscene sound effect
+        try:
+            self.cutscene_sound = pygame.mixer.Sound('assests/Cutscenes.wav')
+            self.cutscene_sound.set_volume(0.7)  # Set appropriate volume
+        except Exception as e:
+            print(f"Error loading cutscene sound: {e}")
+            self.cutscene_sound = None
+
+        # Load final victory sound effect
+        try:
+            self.final_victory_sound = pygame.mixer.Sound('assests/Victory Sound Effect.wav')
+            self.final_victory_sound.set_volume(0.8)  # Slightly louder for final victory
+        except Exception as e:
+            print(f"Error loading final victory sound: {e}")
+            self.final_victory_sound = None
+
+        # Track which scenes have played their sound
+        self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}
+        
         # Victory sequence variables
         self.victory_sequence = False
         self.victory_sequence_start = 0
@@ -181,7 +200,7 @@ class BadmintonGame:
         self.victory_dialog4 = self.victory_dialog_font.render("Alex walks towards the door...", True, (255, 255, 255))
         self.victory_dialog4_rect = self.victory_dialog4.get_rect(center=(WIDTH//2, HEIGHT - 100))
 
-        self.victory_dialog5 = self.victory_dialog_font.render("Alex disappearsas he walks towards the door", True, (255, 255, 255))
+        self.victory_dialog5 = self.victory_dialog_font.render("Alex is disappearing as he walks towards the door...", True, (255, 255, 255))
         self.victory_dialog5_rect = self.victory_dialog5.get_rect(center=(WIDTH//2, HEIGHT - 100))
     
     def handle_events(self):
@@ -634,6 +653,7 @@ class BadmintonGame:
             self.game_over_played = False  # Reset sound flag
             self.victory_played = False    # Reset victory sound flag
             self.crowd_cheer_played = False  # Reset crowd cheer flag
+            self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}  # Reset scene sound tracking
             
             # Reset coin system on full game reset
             self.consecutive_wins = 0
@@ -720,12 +740,27 @@ class BadmintonGame:
 
     def advance_victory_scene(self):
         """Advance to the next victory scene or end sequence"""
-        if self.current_victory_scene < 4:  # Changed from 3 to 4 to accommodate new scene
+        if self.current_victory_scene < 4:
             # Stop crowd cheering when moving from first scene
             if self.current_victory_scene == 0 and self.crowd_cheering:
                 self.crowd_cheering.stop()
+            
+            # Move to next scene
             self.current_victory_scene += 1
+            
+            # Play cutscene sound for specific scenes
+            if self.current_victory_scene in [2, 3, 4] and self.cutscene_sound and not self.scene_sounds_played[self.current_victory_scene]:
+                pygame.mixer.Channel(3).play(self.cutscene_sound)
+                self.scene_sounds_played[self.current_victory_scene] = True
+            
+            # Play final victory sound for scene 5
+            if self.current_victory_scene == 4 and self.final_victory_sound and not self.scene_sounds_played[5]:
+                pygame.mixer.Channel(4).play(self.final_victory_sound)
+                self.scene_sounds_played[5] = True
+            
             self.victory_sequence_start = pygame.time.get_ticks()
         else:
+            # Reset scene sound tracking when resetting game
+            self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}
             # End of sequence, reset game
             self.reset_game(full_reset=True)
