@@ -172,6 +172,16 @@ class BadmintonGame:
         # Second victory dialog
         self.victory_dialog2 = self.victory_dialog_font.render("!!! Alex Shock!! ", True, (255, 255, 255))
         self.victory_dialog2_rect = self.victory_dialog2.get_rect(center=(WIDTH//2, HEIGHT - 100))
+        
+        # Third victory dialog - Alex walking towards door
+        self.victory_dialog3 = self.victory_dialog_font.render("The door has appeared again!! ", True, (255, 255, 255))
+        self.victory_dialog3_rect = self.victory_dialog3.get_rect(center=(WIDTH//2, HEIGHT - 100))
+
+        self.victory_dialog4 = self.victory_dialog_font.render("Alex walks towards the door...", True, (255, 255, 255))
+        self.victory_dialog4_rect = self.victory_dialog4.get_rect(center=(WIDTH//2, HEIGHT - 100))
+
+        self.victory_dialog5 = self.victory_dialog_font.render("Alex is disappearing as he walks towards the door...", True, (255, 255, 255))
+        self.victory_dialog5_rect = self.victory_dialog5.get_rect(center=(WIDTH//2, HEIGHT - 100))
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -479,6 +489,8 @@ class BadmintonGame:
                 self.screen.blit(self.victory_dialog, self.victory_dialog_rect)
             elif self.current_victory_scene == 1:
                 self.screen.blit(self.victory_dialog2, self.victory_dialog2_rect)
+            elif self.current_victory_scene == 2:
+                self.screen.blit(self.victory_dialog3, self.victory_dialog3_rect)
             
             # Draw Next button
             pygame.draw.rect(self.screen, self.next_button_color, self.next_button_rect, border_radius=10)
