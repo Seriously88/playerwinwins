@@ -59,45 +59,35 @@ class CoinBurst:
 
 class Coin:
     def __init__(self, x, y):
-        # Position
         self.x = x
         self.y = y
-        self.radius = 15  # Collision radius
+        self.original_y = y
+        self.collected = False
+        self.rect = pygame.Rect(x, y, 40, 40)  # Increased coin size
+        
+        # Load coin sprite
+        try:
+            self.sprite = pygame.image.load('assests/collectcoins.png')
+            self.sprite = pygame.transform.scale(self.sprite, (40, 40))  # Increased sprite size
+        except Exception as e:
+            print(f"Error loading coin sprite: {e}")
+            self.sprite = None
+            
+        # Animation variables
+        self.float_offset = 0
+        self.float_speed = 2
+        self.float_range = 30
         
         # Floating properties
         self.fall_speed = random.uniform(0.5, 1.5)  # Random fall speed for varied effect
         self.target_y = COURT_GROUND_Y - 50  # Final y position where coin stops falling
         
-        # Load the coin image
-        self.image = None
-        self.load_image()
-        
-        # State
-        self.collected = False
-        self.should_remove = False
-        
         # Burst animation
         self.burst = None
         
-    def load_image(self):
-        """Load the coin sprite"""
-        try:
-            # Load the coin image
-            self.image = pygame.image.load("assests/collectcoins.png").convert_alpha()
-            
-            # Scale if needed (adjust size as desired)
-            self.image = pygame.transform.scale(self.image, (30, 30))
-                
-            print("Loaded coin image")
-        except Exception as e:
-            print(f"Error loading coin sprite: {e}")
-            # Create a fallback yellow circle if image loading fails
-            self.image = pygame.Surface((30, 30), pygame.SRCALPHA)
-            pygame.draw.circle(self.image, (255, 215, 0), (15, 15), 15)  # Gold color
-    
     def update(self):
         """Update coin position for floating down effect"""
-        if not self.collected and not self.should_remove:
+        if not self.collected:
             # Only move down if not at the target position
             if self.y < self.target_y:
                 self.y += self.fall_speed
@@ -106,13 +96,13 @@ class Coin:
                 self.x += random.uniform(-0.3, 0.3)
             else:
                 # Mark the coin for removal when it hits the ground
-                self.should_remove = True
+                self.collected = True
                 
         # Update burst animation if it exists
         if self.burst:
             self.burst.update()
             if not self.burst.alive:
-                self.should_remove = True
+                self.collected = True
     
     def collect(self):
         """Mark coin as collected and create burst effect"""
@@ -124,12 +114,12 @@ class Coin:
     
     def draw(self, surface):
         """Draw the coin if not collected, or the burst animation if collecting"""
-        if not self.collected and not self.should_remove and self.image:
+        if not self.collected and self.sprite:
             # Calculate position (centered on the coin's position)
-            rect = self.image.get_rect(center=(int(self.x), int(self.y)))
+            rect = self.sprite.get_rect(center=(int(self.x), int(self.y)))
             
             # Draw the coin
-            surface.blit(self.image, rect)
+            surface.blit(self.sprite, rect)
         
         # Draw burst animation if it exists
         if self.burst and self.burst.alive:
@@ -137,7 +127,7 @@ class Coin:
     
     def collides_with_player(self, player_rect):
         """Check if the coin collides with the player"""
-        if self.collected or self.should_remove:
+        if self.collected:
             return False
             
         # Simple circle-rectangle collision
@@ -150,4 +140,4 @@ class Coin:
         distance_y = self.y - closest_y
         
         # If the distance is less than the circle's radius, there is a collision
-        return (distance_x * distance_x + distance_y * distance_y) < (self.radius * self.radius) 
+        return (distance_x * distance_x + distance_y * distance_y) < (self.rect.width * self.rect.width) 

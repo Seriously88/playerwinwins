@@ -1,6 +1,6 @@
 # Game window settings
-WIDTH = 800
-HEIGHT = 600
+WIDTH = 1280
+HEIGHT = 720
 
 # Physics constants
 GRAVITY = 0.5
@@ -23,10 +23,10 @@ MIN_POINT_DIFFERENCE = 2
 GAMES_TO_WIN_MATCH = 2
 
 # Court dimensions
-COURT_GROUND_Y = 500
+COURT_GROUND_Y = 600  # Adjusted for taller screen
 NET_X = WIDTH // 2
-COURT_LEFT = 20
-COURT_RIGHT = WIDTH - 20
+COURT_LEFT = 40  # Slightly increased margin for wider screen
+COURT_RIGHT = WIDTH - 40  # Adjusted for wider screen
 
 # Colors
 WHITE = (255, 255, 255)
@@ -47,7 +47,7 @@ DROP_SHOT_SPEED = 4
 SHOT_COOLDOWN = 30
 
 # Asset paths
-COURT_IMAGE = "assests/Badminton court.png"
+COURT_IMAGE = "assests/badmintoncourtresize.png"
 PLAYER_IMAGE = "assests/player.jpg"
 PLAYER_ANIMATION_DIR = "assests/player_animation_improved"
 SHUTTLE_IMAGE = "assests/shuttlecockpic.png"

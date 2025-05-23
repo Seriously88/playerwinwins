@@ -13,14 +13,14 @@ class IntroSequence:
         
         # Load instruction scene
         try:
-            self.instruction_scene = pygame.image.load('assests/instruction and tips.png')
+            self.instruction_scene = pygame.image.load('assests/instruction.png')
             self.instruction_scene = pygame.transform.scale(self.instruction_scene, (WIDTH, HEIGHT))
         except Exception as e:
             print(f"Error loading instruction scene: {e}")
             self.instruction_scene = None
             
-        # Button properties
-        self.start_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT - 100, 200, 50)
+        # Button properties - positioned under the instruction title
+        self.start_button_rect = pygame.Rect(WIDTH//2 - 100, 150, 200, 50)  # Y position changed to 150
         self.start_button_color = (0, 255, 255)  # Cyan
         self.start_button_hover_color = (0, 200, 255)
         self.button_font = pygame.font.SysFont(None, 36)
@@ -37,7 +37,7 @@ class IntroSequence:
 
     def play_video(self):
         # Open the video file
-        video = cv2.VideoCapture('assests/transitionscene.mp4')
+        video = cv2.VideoCapture('assests/victoryendingscene/transitionscene.mp4')
         
         if not video.isOpened():
             print("Error loading video file")

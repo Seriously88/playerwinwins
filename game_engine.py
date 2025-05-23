@@ -1,6 +1,8 @@
 import pygame
 import random
 import math
+import cv2
+import numpy as np
 from config import *
 from player import Player, NPC
 from shuttle import Shuttlecock
@@ -144,32 +146,16 @@ class BadmintonGame:
         # Victory sequence variables
         self.victory_sequence = False
         self.victory_sequence_start = 0
-        self.current_victory_scene = 0
-        self.crowd_cheer_played = False  # Track if cheer has been played
+        self.victory_video_played = False
         
         # Next button properties - positioned at bottom right
         self.next_button_rect = pygame.Rect(WIDTH - 150, HEIGHT - 80, 100, 40)
         self.next_button_color = (0, 255, 255)  # Neon cyan
         self.next_button_hover_color = (0, 200, 255)  # Slightly darker for hover
         self.next_button_font = pygame.font.SysFont(None, 36)
-        self.next_button_text = self.next_button_font.render("Next", True, WHITE)
+        self.next_button_text = self.next_button_font.render("Skip", True, WHITE)
         self.next_button_text_rect = self.next_button_text.get_rect(center=self.next_button_rect.center)
         
-        # Load victory cutscene images
-        try:
-            self.victory_scenes = [
-                pygame.image.load('assests/cutscenes/lv2victorycutecene1.png'),
-                pygame.image.load('assests/cutscenes/lv2victorycutscene2.png'),
-                pygame.image.load('assests/cutscenes/lv2victorycutscene3.png'),
-                pygame.image.load('assests/cutscenes/lv2victorycutscene4.png'),
-                pygame.image.load('assests/cutscenes/lv2victorycutscene5.png')
-            ]
-            # Scale all victory scenes
-            self.victory_scenes = [pygame.transform.scale(img, (WIDTH, HEIGHT)) for img in self.victory_scenes]
-        except Exception as e:
-            print(f"Error loading victory cutscene images: {e}")
-            self.victory_scenes = None
-
         # Load losing scene
         try:
             self.losing_cutscene = pygame.image.load('assests/cutscenes/losingscene.png')
@@ -238,8 +224,6 @@ class BadmintonGame:
                 if self.match_over and self.player_lives <= 0:
                     if self.restart_button_rect.collidepoint(event.pos):
                         self.reset_game(full_reset=True)
-                elif self.victory_sequence and self.next_button_rect.collidepoint(event.pos):
-                    self.advance_victory_scene()
             
             # Handle key presses
             if event.type == pygame.KEYDOWN:
@@ -345,18 +329,6 @@ class BadmintonGame:
         
         # Handle victory sequence
         if self.victory_sequence:
-            # Calculate time since sequence started
-            elapsed = (current_time - self.victory_sequence_start) / 1000  # Convert to seconds
-            
-            # Auto-advance after 6 seconds if not manually advanced and not on last scene
-            if elapsed >= 6 and self.current_victory_scene < 4:
-                self.advance_victory_scene()
-            
-            # Update button hover effect only if not on last scene
-            if self.current_victory_scene < 4:
-                mouse_pos = pygame.mouse.get_pos()
-                self.next_button_color = (0, 200, 255) if self.next_button_rect.collidepoint(mouse_pos) else (0, 255, 255)
-            
             return
             
         # Regular game updates
@@ -510,7 +482,7 @@ class BadmintonGame:
                         if self.consecutive_wins >= 2:
                             self.spawn_coins(3)  # Spawn 3 coins
                 
-                # Check if match has been won due to lives
+                # Check for match over
                 if self.player_lives <= 0:
                     self.match_over = True
                     self.show_feedback("Game Over! Player is out of lives!", RED, 120)
@@ -563,33 +535,18 @@ class BadmintonGame:
     
     def draw(self):
         # Handle victory sequence display
-        if self.victory_sequence and self.victory_scenes:
-            self.screen.fill(BLACK)
-            self.screen.blit(self.victory_scenes[self.current_victory_scene], (0, 0))
+        if self.victory_sequence:
+            if not hasattr(self, 'victory_video_played'):
+                self.victory_video_played = False
             
-            # Play crowd cheering on first scene
-            if self.current_victory_scene == 0 and not self.crowd_cheer_played and self.crowd_cheering:
-                self.crowd_cheering.play(-1)  # -1 means loop indefinitely
-                self.crowd_cheer_played = True
-                
-            # Show appropriate dialog based on current scene
-            if self.current_victory_scene == 0:
-                self.screen.blit(self.victory_dialog, self.victory_dialog_rect)
-            elif self.current_victory_scene == 1:
-                self.screen.blit(self.victory_dialog2, self.victory_dialog2_rect)
-            elif self.current_victory_scene == 2:
-                self.screen.blit(self.victory_dialog3, self.victory_dialog3_rect)
-            elif self.current_victory_scene == 3:
-                self.screen.blit(self.victory_dialog4, self.victory_dialog4_rect)
-            elif self.current_victory_scene == 4:
-                self.screen.blit(self.victory_dialog5, self.victory_dialog5_rect)
+            if not self.victory_video_played:
+                self.victory_video_played = True
+                if not self.play_victory_video():
+                    return
+                # End the game after video
+                self.running = False
+                return
             
-            # Draw Next button only if not on the last scene
-            if self.current_victory_scene < 4:
-                pygame.draw.rect(self.screen, self.next_button_color, self.next_button_rect, border_radius=10)
-                self.screen.blit(self.next_button_text, self.next_button_text_rect)
-            
-            pygame.display.flip()
             return
             
         # Normal game rendering
@@ -615,14 +572,19 @@ class BadmintonGame:
         score_text = self.font.render(f"{self.player_score} - {self.npc_score}", True, BLACK)
         self.screen.blit(score_text, (WIDTH//2 - 30, 20))
         
-        # Draw lives (hearts)
+        # Draw lives (hearts) - increased size
+        heart_size = 40  # Increased from default
         for i in range(self.player_lives):
             pygame.draw.polygon(self.screen, BLUE, 
-                [(30 + i*25, 30), (40 + i*25, 20), (50 + i*25, 30), (40 + i*25, 45)])
+                [(30 + i*45, 30),  # Increased spacing between hearts
+                 (45 + i*45, 15),  # Increased heart size
+                 (60 + i*45, 30), 
+                 (45 + i*45, 55)])  # Made hearts taller
                 
-        # Draw coin count below lives
-        coin_text = self.font.render(f"Coins: {self.coin_count}", True, YELLOW)
-        self.screen.blit(coin_text, (30, 55))  # Position below the hearts
+        # Draw coin count below lives with larger font
+        coin_font = pygame.font.SysFont(None, 48)  # Increased font size
+        coin_text = coin_font.render(f"Coins: {self.coin_count}", True, YELLOW)
+        self.screen.blit(coin_text, (30, 70))  # Adjusted position to account for larger hearts
         
         # Draw serve instructions
         if self.game_state == SERVE_STATE and self.player_serves and self.serving and not self.match_over:
@@ -689,14 +651,13 @@ class BadmintonGame:
                 pygame.draw.rect(self.screen, button_color, self.restart_button_rect, border_radius=10)
                 self.screen.blit(self.restart_button_text, self.restart_button_text_rect)
             
-            elif self.player_score > self.npc_score and self.victory_scenes:
+            elif self.player_score > self.npc_score:
                 # Start victory sequence
                 if not self.victory_sequence:
                     self.victory_sequence = True
                     self.victory_sequence_start = pygame.time.get_ticks()
-                    self.current_victory_scene = 0
             else:
-                # Fallback to displaying text messages if images aren't available
+                # Fallback to displaying text messages
                 winner = "Player" if (self.player_score > self.npc_score and self.player_lives > 0) else "NPC"
                 display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
                 if self.player_lives <= 0:
@@ -735,8 +696,8 @@ class BadmintonGame:
             self.match_over = False
             self.game_over_played = False  # Reset sound flag
             self.victory_played = False    # Reset victory sound flag
-            self.crowd_cheer_played = False  # Reset crowd cheer flag
-            self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}  # Reset scene sound tracking
+            self.victory_sequence = False  # Reset victory sequence
+            self.victory_video_played = False  # Reset victory video flag
             
             # Reset flash effect
             self.flash_effect = False
@@ -829,36 +790,65 @@ class BadmintonGame:
         # Show feedback
         self.show_feedback("Coins Spawned!", YELLOW, 60)
 
-    def advance_victory_scene(self):
-        """Advance to the next victory scene or end sequence"""
-        if self.current_victory_scene < 4:
-            # Stop crowd cheering when moving from first scene
-            if self.current_victory_scene == 0 and self.crowd_cheering:
-                self.crowd_cheering.stop()
-            
-            # Move to next scene
-            self.current_victory_scene += 1
-            
-            # Play cutscene sound for specific scenes
-            if self.current_victory_scene in [2, 3, 4] and self.cutscene_sound and not self.scene_sounds_played[self.current_victory_scene]:
-                pygame.mixer.Channel(3).play(self.cutscene_sound)
-                self.scene_sounds_played[self.current_victory_scene] = True
-            
-            # Play final victory sound for scene 5
-            if self.current_victory_scene == 4 and self.final_victory_sound and not self.scene_sounds_played[5]:
-                pygame.mixer.Channel(4).play(self.final_victory_sound)
-                self.scene_sounds_played[5] = True
-            
-            self.victory_sequence_start = pygame.time.get_ticks()
-        else:
-            # Reset scene sound tracking when resetting game
-            self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}
-            # End of sequence, reset game
-            self.reset_game(full_reset=True)
-
     def spawn_bomb(self):
         """Spawn a bomb at a random position above the player's side of the court"""
         # Only spawn between left court edge and net (player's side)
         x = random.randint(COURT_LEFT + 50, NET_X - 50)
         y = -20  # Start above the screen
         self.bombs.append(Bomb(x, y))
+
+    def play_victory_video(self):
+        """Play the victory ending video sequence"""
+        # Open the video file
+        video = cv2.VideoCapture('assests/victoryendingscene/victoryendingscene.mp4')
+        
+        if not video.isOpened():
+            print("Error loading victory video file")
+            return False
+            
+        # Stop background music during video
+        pygame.mixer.music.pause()
+            
+        while True:
+            ret, frame = video.read()
+            
+            if not ret:
+                break
+                
+            # Convert frame from BGR to RGB
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(frame, (WIDTH, HEIGHT))
+            
+            # Convert to pygame surface
+            frame = np.swapaxes(frame, 0, 1)
+            frame = pygame.surfarray.make_surface(frame)
+            
+            # Handle events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    video.release()
+                    return False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        video.release()
+                        return True
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # Left click
+                        if self.next_button_rect.collidepoint(event.pos):
+                            video.release()
+                            return True
+            
+            # Display frame
+            self.screen.blit(frame, (0, 0))
+            
+            # Draw skip button with hover effect
+            mouse_pos = pygame.mouse.get_pos()
+            button_color = self.next_button_hover_color if self.next_button_rect.collidepoint(mouse_pos) else self.next_button_color
+            pygame.draw.rect(self.screen, button_color, self.next_button_rect, border_radius=5)
+            self.screen.blit(self.next_button_text, self.next_button_text_rect)
+            
+            pygame.display.flip()
+            self.clock.tick(30)
+            
+        video.release()
+        return True

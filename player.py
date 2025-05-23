@@ -10,11 +10,10 @@ WALK_SPEED = 4
 
 class Player:
     def __init__(self, x, y, color):
-        self.rect = pygame.Rect(x, y, 50, 95)  # Increased from 40x80 to 50x95
+        self.rect = pygame.Rect(x, y, 100, 150)  # Increased size significantly
         self.color = color
-        self.velocity_y = 0
-        self.velocity_x = 0
-        self.on_ground = True
+        self.velocity = pygame.Vector2(0, 0)
+        self.on_ground = False
         self.facing_right = True
         
         # Animation system
@@ -26,10 +25,10 @@ class Player:
         self.is_swinging = False
         self.swing_cooldown = 0
         self.swing_power = 0
-        self.swing_type = None  # Can be "normal", "smash", or "drop"
+        self.swing_type = "normal"
         
         # Create racket hitbox (positioned relative to player)
-        self.racket_rect = pygame.Rect(0, 0, 25, 18)  # Made smaller than original 30x20
+        self.racket_rect = pygame.Rect(0, 0, 40, 30)  # Increased racket size to match player
         self.update_racket_position()
         
         # Create racket visuals
@@ -37,6 +36,15 @@ class Player:
         self.racket_swing_color = (255, 100, 0)  # Orange when swinging
         self.racket_frame_color = (50, 50, 50)  # Dark gray for racket frame
         self.racket_strings_color = (240, 240, 240)  # White for racket strings
+
+        # Load player sprite
+        try:
+            self.sprite = pygame.image.load('assests/player_animation_BR/player_idle.png')
+            # Scale sprite to be larger
+            self.sprite = pygame.transform.scale(self.sprite, (120, 180))  # Increased sprite size significantly
+        except Exception as e:
+            print(f"Error loading player sprite: {e}")
+            self.sprite = None
 
     def update_racket_position(self):
         """Update the racket position based on player position and facing direction"""
@@ -47,16 +55,16 @@ class Player:
 
     def handle_input(self, keys):
         # Reset horizontal velocity
-        self.velocity_x = 0
+        self.velocity.x = 0
         
         # Left/Right movement
         if keys[pygame.K_LEFT]:
-            self.velocity_x = -SPRINT_SPEED if keys[pygame.K_LSHIFT] else -WALK_SPEED
+            self.velocity.x = -SPRINT_SPEED if keys[pygame.K_LSHIFT] else -WALK_SPEED
             self.facing_right = False
             if self.on_ground and not self.is_swinging:
                 self.animation_state = "run"
         elif keys[pygame.K_RIGHT]:
-            self.velocity_x = SPRINT_SPEED if keys[pygame.K_LSHIFT] else WALK_SPEED
+            self.velocity.x = SPRINT_SPEED if keys[pygame.K_LSHIFT] else WALK_SPEED
             self.facing_right = True
             if self.on_ground and not self.is_swinging:
                 self.animation_state = "run"
@@ -65,7 +73,7 @@ class Player:
 
         # Jump (only when on ground)
         if keys[pygame.K_UP] and self.on_ground:
-            self.velocity_y = JUMP_STRENGTH
+            self.velocity.y = JUMP_STRENGTH
             self.on_ground = False
             self.animation_state = "jump"
         
@@ -190,13 +198,13 @@ class Player:
     def update(self):
         # Apply gravity when not on ground
         if not self.on_ground:
-            self.velocity_y += GRAVITY
+            self.velocity.y += GRAVITY
         
         # Apply horizontal movement
-        self.rect.x += self.velocity_x
+        self.rect.x += self.velocity.x
         
         # Apply vertical movement with gravity
-        self.rect.y += self.velocity_y
+        self.rect.y += self.velocity.y
 
         # Keep player within screen bounds
         if self.rect.left < COURT_LEFT:
@@ -217,7 +225,7 @@ class Player:
         if self.rect.bottom >= COURT_GROUND_Y:
             self.rect.bottom = COURT_GROUND_Y
             self.on_ground = True
-            self.velocity_y = 0
+            self.velocity.y = 0
             
             # Reset to idle animation if we were jumping
             if self.animation_state == "jump" and not self.is_swinging:
@@ -226,7 +234,7 @@ class Player:
         # Ceiling collision
         if self.rect.top < 0:
             self.rect.top = 0
-            self.velocity_y = 0
+            self.velocity.y = 0
         
         # Update racket position
         self.update_racket_position()
@@ -312,6 +320,7 @@ class Player:
 class NPC(Player):
     def __init__(self, x, y, color):
         super().__init__(x, y, color)
+        self.rect = pygame.Rect(x, y, 100, 150)  # Increased size to match player
         self.direction = -1
         self.jump_timer = 0
         self.decision_timer = 0
@@ -339,6 +348,16 @@ class NPC(Player):
         self.max_player_positions = 10
         self.player_position_timer = 0
         self.strategy_timer = 180
+
+        # Load NPC sprite with larger size
+        try:
+            self.sprite = pygame.image.load('assests/player_animation_BR/player_idle.png')
+            self.sprite = pygame.transform.scale(self.sprite, (120, 180))  # Increased sprite size
+            # Flip the sprite horizontally for NPC
+            self.sprite = pygame.transform.flip(self.sprite, True, False)
+        except Exception as e:
+            print(f"Error loading NPC sprite: {e}")
+            self.sprite = None
 
     def track_shuttlecock(self, shuttle, player=None):
         """AI logic to track and respond to shuttlecock, considers player position when available"""
@@ -393,23 +412,23 @@ class NPC(Player):
             if abs(self.rect.centerx - target_x) > 40:
                 # Move toward target position
                 if self.rect.centerx < target_x:
-                    self.velocity_x = WALK_SPEED
+                    self.velocity.x = WALK_SPEED
                     self.facing_right = True
                 else:
-                    self.velocity_x = -WALK_SPEED
+                    self.velocity.x = -WALK_SPEED
                     self.facing_right = False
                 
                 # Mark that we are not yet in position
                 self.in_hit_position = False
             else:
                 # We're in horizontal hitting position, slow down/stop
-                self.velocity_x = 0
+                self.velocity.x = 0
                 self.in_hit_position = True
             
             # Simplified jumping logic
             # Jump if shuttle is high and we're on ground
             if shuttle.y < self.rect.top + 80 and self.on_ground and random.random() < 0.3:
-                self.velocity_y = JUMP_STRENGTH
+                self.velocity.y = JUMP_STRENGTH
                 self.on_ground = False
                 
             # Check if we're in a good position to hit
@@ -442,21 +461,21 @@ class NPC(Player):
         if abs(self.rect.centerx - target_x) > 50:
             # Move toward target
             if self.rect.centerx < target_x:
-                self.velocity_x = WALK_SPEED * 0.7
+                self.velocity.x = WALK_SPEED * 0.7
                 self.facing_right = True
             else:
-                self.velocity_x = -WALK_SPEED * 0.7
+                self.velocity.x = -WALK_SPEED * 0.7
                 self.facing_right = False
         else:
             # Stand still with occasional small movements
             if random.random() < 0.03:
                 self.direction *= -1
                 self.facing_right = (self.direction > 0)
-            self.velocity_x = 0
+            self.velocity.x = 0
         
         # Occasionally jump
         if random.random() < 0.003 and self.on_ground:
-            self.velocity_y = JUMP_STRENGTH
+            self.velocity.y = JUMP_STRENGTH
             self.on_ground = False
     
     def is_in_hitting_range(self, shuttle):
@@ -500,11 +519,11 @@ class NPC(Player):
             # Move toward the strategic position
             if abs(self.rect.centerx - target_x) > 50:
                 if self.rect.centerx < target_x:
-                    self.velocity_x = WALK_SPEED * 0.7
+                    self.velocity.x = WALK_SPEED * 0.7
                     self.direction = 1
                     self.facing_right = True
                 else:
-                    self.velocity_x = -WALK_SPEED * 0.7
+                    self.velocity.x = -WALK_SPEED * 0.7
                     self.direction = -1
                     self.facing_right = False
             else:
@@ -516,7 +535,7 @@ class NPC(Player):
             
             # Random jumps when idle
             if random.random() < 0.005 and self.on_ground:
-                self.velocity_y = JUMP_STRENGTH
+                self.velocity.y = JUMP_STRENGTH
                 self.on_ground = False
         
         # Let parent class handle standard movement physics
@@ -525,5 +544,5 @@ class NPC(Player):
         # Ensure NPC stays on right side of net
         if self.rect.left < NET_X:
             self.rect.left = NET_X
-            self.velocity_x = WALK_SPEED  # Move back to right side
+            self.velocity.x = WALK_SPEED  # Move back to right side
             self.direction = 1  # Change direction if at net
