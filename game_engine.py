@@ -22,6 +22,13 @@ class BadmintonGame:
         # Initialize pygame mixer for sound
         pygame.mixer.init()
         
+        # Load custom font for buttons
+        try:
+            self.button_font = pygame.font.Font('assests/PressStart2P-Regular.ttf', 20)  # Font for buttons
+        except Exception as e:
+            print(f"Error loading custom font: {e}")
+            self.button_font = pygame.font.SysFont(None, 32)  # Fallback font
+        
         # Load victory video audio
         try:
             self.victory_video_audio = pygame.mixer.Sound('assests/endscenessound.WAV')
@@ -102,7 +109,18 @@ class BadmintonGame:
         # Score
         self.player_score = 0
         self.npc_score = 0
-        self.font = pygame.font.SysFont(None, 36)
+        
+        # Load custom font
+        try:
+            self.game_font = pygame.font.Font('assests/PressStart2P-Regular.ttf', 24)  # Base size
+            self.large_font = pygame.font.Font('assests/PressStart2P-Regular.ttf', 32)  # Larger size
+            self.small_font = pygame.font.Font('assests/PressStart2P-Regular.ttf', 16)  # Smaller size
+        except Exception as e:
+            print(f"Error loading custom font: {e}")
+            # Fallback to system font if custom font fails to load
+            self.game_font = pygame.font.SysFont(None, 36)
+            self.large_font = pygame.font.SysFont(None, 48)
+            self.small_font = pygame.font.SysFont(None, 24)
         
         # Determine who serves first (random)
         self.player_serves = random.choice([True, False])
@@ -114,7 +132,7 @@ class BadmintonGame:
         # Shot feedback
         self.feedback_message = ""
         self.feedback_timer = 0
-        self.feedback_color = BLACK
+        self.feedback_color = WHITE
         
         # Load court image
         try:
@@ -160,8 +178,7 @@ class BadmintonGame:
         self.next_button_rect = pygame.Rect(WIDTH - 150, HEIGHT - 80, 100, 40)
         self.next_button_color = (0, 255, 255)  # Neon cyan
         self.next_button_hover_color = (0, 200, 255)  # Slightly darker for hover
-        self.next_button_font = pygame.font.SysFont(None, 36)
-        self.next_button_text = self.next_button_font.render("Skip", True, WHITE)
+        self.next_button_text = self.button_font.render("Skip", True, WHITE)
         self.next_button_text_rect = self.next_button_text.get_rect(center=self.next_button_rect.center)
         
         # Load losing scene and sound
@@ -176,33 +193,31 @@ class BadmintonGame:
             self.losing_sound = None
         
         # Restart button properties
-        self.restart_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 100, 200, 60)
-        self.restart_button_color = (255, 215, 0)  # Gold color
-        self.restart_button_hover_color = (255, 255, 0)  # Bright yellow for hover
-        self.restart_button_font = pygame.font.SysFont(None, 48)
-        self.restart_button_text = self.restart_button_font.render("Restart", True, (0, 0, 0))
+        self.restart_button_rect = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 + 100, 300, 60)  # Made wider for pixel font
+        self.restart_button_color = (0, 0, 0)  # Black color
+        self.restart_button_hover_color = (40, 40, 40)  # Dark gray for hover
+        self.restart_button_text = self.button_font.render("Restart", True, WHITE)
         self.restart_button_text_rect = self.restart_button_text.get_rect(center=self.restart_button_rect.center)
         
         # Track if losing sound has been played
         self.losing_sound_played = False
         
         # Victory dialog texts
-        self.victory_dialog_font = pygame.font.SysFont(None, 48)
-        self.victory_dialog = self.victory_dialog_font.render("Finally, Alex has won the ultimate sport quest", True, (255, 255, 255))
+        self.victory_dialog = self.game_font.render("Finally, Alex has won the ultimate sport quest", True, WHITE)
         self.victory_dialog_rect = self.victory_dialog.get_rect(center=(WIDTH//2, HEIGHT - 100))
         
         # Second victory dialog
-        self.victory_dialog2 = self.victory_dialog_font.render("!!! Alex Shock!! ", True, (255, 255, 255))
+        self.victory_dialog2 = self.game_font.render("!!! Alex Shock!! ", True, WHITE)
         self.victory_dialog2_rect = self.victory_dialog2.get_rect(center=(WIDTH//2, HEIGHT - 100))
         
         # Third victory dialog - Alex walking towards door
-        self.victory_dialog3 = self.victory_dialog_font.render("The door has appeared again!! ", True, (255, 255, 255))
+        self.victory_dialog3 = self.game_font.render("The door has appeared again!! ", True, WHITE)
         self.victory_dialog3_rect = self.victory_dialog3.get_rect(center=(WIDTH//2, HEIGHT - 100))
 
-        self.victory_dialog4 = self.victory_dialog_font.render("Alex walks towards the door...", True, (255, 255, 255))
+        self.victory_dialog4 = self.game_font.render("Alex walks towards the door...", True, WHITE)
         self.victory_dialog4_rect = self.victory_dialog4.get_rect(center=(WIDTH//2, HEIGHT - 100))
 
-        self.victory_dialog5 = self.victory_dialog_font.render("Alex is disappearing as he walks towards the door...", True, (255, 255, 255))
+        self.victory_dialog5 = self.game_font.render("Alex is disappearing as he walks towards the door...", True, WHITE)
         self.victory_dialog5_rect = self.victory_dialog5.get_rect(center=(WIDTH//2, HEIGHT - 100))
         
         # Flash effect variables
@@ -309,7 +324,7 @@ class BadmintonGame:
     def show_feedback(self, message, color=WHITE, duration=60):
         """Show a feedback message on screen for a duration in frames"""
         self.feedback_message = message
-        self.feedback_color = color
+        self.feedback_color = WHITE  # Always use white color
         self.feedback_timer = duration
         
         # Start flash effect after 5 consecutive wins
@@ -608,8 +623,8 @@ class BadmintonGame:
             coin.draw(self.screen)
         
         # Draw scores
-        score_text = self.font.render(f"{self.player_score} - {self.npc_score}", True, BLACK)
-        self.screen.blit(score_text, (WIDTH//2 - 30, 20))
+        score_text = self.game_font.render(f"{self.player_score} - {self.npc_score}", True, WHITE)
+        self.screen.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 20))
         
         # Draw lives (hearts) - increased size
         heart_size = 40  # Increased from default
@@ -620,20 +635,19 @@ class BadmintonGame:
                  (60 + i*45, 30), 
                  (45 + i*45, 55)])  # Made hearts taller
                 
-        # Draw coin count below lives with larger font
-        coin_font = pygame.font.SysFont(None, 48)  # Increased font size
-        coin_text = coin_font.render(f"Coins: {self.coin_count}", True, YELLOW)
-        self.screen.blit(coin_text, (30, 70))  # Adjusted position to account for larger hearts
+        # Draw coin count below lives with gold color
+        coin_text = self.game_font.render(f"Coins: {self.coin_count}", True, (255, 215, 0))  # Gold color (255, 215, 0)
+        self.screen.blit(coin_text, (30, 70))
         
         # Draw serve instructions
         if self.game_state == SERVE_STATE and self.player_serves and self.serving and not self.match_over:
-            display_message(self.screen, "Press SPACE to serve", (WIDTH//2 - 100, 100))
+            serve_text = self.game_font.render("Press SPACE to serve", True, WHITE)
+            self.screen.blit(serve_text, (WIDTH//2 - serve_text.get_width()//2, 100))
         
         # Draw feedback message
         if self.feedback_timer > 0:
-            feedback_font = pygame.font.SysFont(None, 48)
-            text = feedback_font.render(self.feedback_message, True, self.feedback_color)
-            self.screen.blit(text, (WIDTH//2 - text.get_width()//2, HEIGHT//2 - 150))
+            feedback_text = self.game_font.render(self.feedback_message, True, WHITE)
+            self.screen.blit(feedback_text, (WIDTH//2 - feedback_text.get_width()//2, HEIGHT//2 - 150))
         
         # Draw controls only when requested
         if self.showing_controls:
@@ -650,22 +664,21 @@ class BadmintonGame:
             ]
             
             # Draw a semi-transparent background for better readability
-            controls_surface = pygame.Surface((300, 225))
+            controls_surface = pygame.Surface((400, 250))
             controls_surface.set_alpha(200)
-            controls_surface.fill((240, 240, 240))
-            self.screen.blit(controls_surface, (10, HEIGHT - 210))
+            controls_surface.fill((40, 40, 40))  # Darker background for white text
+            self.screen.blit(controls_surface, (10, HEIGHT - 260))
             
-            control_y = HEIGHT - 200
+            control_y = HEIGHT - 250
             for line in controls:
-                control_text = pygame.font.SysFont(None, 24).render(line, True, BLACK)
+                control_text = self.small_font.render(line, True, WHITE)
                 self.screen.blit(control_text, (20, control_y))
-                control_y += 25
+                control_y += 27
         
         # Draw badminton rules
         if self.game_state == SERVE_STATE and not self.showing_controls:
-            # Display compact rules at the bottom of the screen
-            display_message(self.screen, f"First to {POINTS_TO_WIN} wins. Must win by {MIN_POINT_DIFFERENCE} clear points.", 
-                           (50, HEIGHT - 40), 20)
+            rules_text = self.small_font.render(f"First to {POINTS_TO_WIN} wins. Must win by {MIN_POINT_DIFFERENCE} clear points.", True, WHITE)
+            self.screen.blit(rules_text, (50, HEIGHT - 40))
         
         # Draw all bombs
         for bomb in self.bombs:
@@ -698,27 +711,22 @@ class BadmintonGame:
                     self.dark_overlay.set_alpha(self.current_overlay_alpha)
                     self.screen.blit(self.dark_overlay, (0, 0))
                     
-                    # Play losing sound if not already played
+                    # Play only the losing sound if not already played
                     if not self.losing_sound_played and self.losing_sound:
-                        pygame.mixer.stop()  # Stop any playing sounds
+                        pygame.mixer.stop()  # Stop all sound effects
                         pygame.mixer.music.stop()  # Stop background music
+                        pygame.time.delay(100)  # Small delay to ensure clean audio transition
                         self.losing_sound.play()
                         self.losing_sound_played = True
-                    
-                    # Create a surface for the button area
-                    button_surface = pygame.Surface((self.restart_button_rect.width + 20, 
-                                                   self.restart_button_rect.height + 20))
-                    button_surface.fill((0, 0, 0))
-                    button_surface.set_alpha(0)  # Make button background transparent
                     
                     # Draw restart button with hover effect and glow
                     mouse_pos = pygame.mouse.get_pos()
                     button_color = self.restart_button_hover_color if self.restart_button_rect.collidepoint(mouse_pos) else self.restart_button_color
                     
-                    # Draw button with glow effect
-                    glow_rect = self.restart_button_rect.inflate(10, 10)
-                    pygame.draw.rect(self.screen, (255, 255, 100, 128), glow_rect, border_radius=15)
+                    # Draw button with outline
                     pygame.draw.rect(self.screen, button_color, self.restart_button_rect, border_radius=10)
+                    # Add white outline
+                    pygame.draw.rect(self.screen, WHITE, self.restart_button_rect, border_radius=10, width=2)
                     self.screen.blit(self.restart_button_text, self.restart_button_text_rect)
 
             elif self.player_score > self.npc_score:

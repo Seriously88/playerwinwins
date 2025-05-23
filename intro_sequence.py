@@ -1,7 +1,7 @@
 import pygame
 import cv2
 import numpy as np
-from config import WIDTH, HEIGHT
+from config import WIDTH, HEIGHT, WHITE
 
 class IntroSequence:
     def __init__(self):
@@ -13,6 +13,13 @@ class IntroSequence:
         
         # Initialize pygame mixer for sound
         pygame.mixer.init()
+        
+        # Load custom font
+        try:
+            self.button_font = pygame.font.Font('assests/PressStart2P-Regular.ttf', 20)  # Font for buttons
+        except Exception as e:
+            print(f"Error loading custom font: {e}")
+            self.button_font = pygame.font.SysFont(None, 32)  # Fallback font
         
         # Load transition video audio
         try:
@@ -31,19 +38,17 @@ class IntroSequence:
             self.instruction_scene = None
             
         # Button properties - positioned under the instruction title
-        self.start_button_rect = pygame.Rect(WIDTH//2 - 100, 150, 200, 50)  # Y position changed to 150
-        self.start_button_color = (0, 255, 255)  # Cyan
-        self.start_button_hover_color = (0, 200, 255)
-        self.button_font = pygame.font.SysFont(None, 36)
-        self.start_button_text = self.button_font.render("Start Game", True, (0, 0, 0))
+        self.start_button_rect = pygame.Rect(WIDTH//2 - 150, 150, 300, 50)  # Made wider for pixel font
+        self.start_button_color = (0, 0, 0)  # Black
+        self.start_button_hover_color = (40, 40, 40)  # Dark gray for hover
+        self.start_button_text = self.button_font.render("Start Game", True, WHITE)
         self.start_button_text_rect = self.start_button_text.get_rect(center=self.start_button_rect.center)
         
         # Skip button properties
         self.skip_button_rect = pygame.Rect(WIDTH - 120, 20, 100, 40)  # Position in top right
-        self.skip_button_color = (200, 200, 200)  # Light gray
-        self.skip_button_hover_color = (160, 160, 160)  # Darker gray for hover
-        self.skip_button_font = pygame.font.SysFont(None, 32)
-        self.skip_button_text = self.skip_button_font.render("Skip", True, (0, 0, 0))
+        self.skip_button_color = (0, 0, 0)  # Black
+        self.skip_button_hover_color = (40, 40, 40)  # Dark gray for hover
+        self.skip_button_text = self.button_font.render("Skip", True, WHITE)
         self.skip_button_text_rect = self.skip_button_text.get_rect(center=self.skip_button_rect.center)
 
     def play_video(self):
@@ -97,10 +102,12 @@ class IntroSequence:
             # Display frame
             self.screen.blit(frame, (0, 0))
             
-            # Draw skip button with hover effect
+            # Draw skip button with hover effect and outline
             mouse_pos = pygame.mouse.get_pos()
             button_color = self.skip_button_hover_color if self.skip_button_rect.collidepoint(mouse_pos) else self.skip_button_color
             pygame.draw.rect(self.screen, button_color, self.skip_button_rect, border_radius=5)
+            # Add white outline to make button visible against dark backgrounds
+            pygame.draw.rect(self.screen, WHITE, self.skip_button_rect, border_radius=5, width=2)
             self.screen.blit(self.skip_button_text, self.skip_button_text_rect)
             
             pygame.display.flip()
@@ -131,10 +138,12 @@ class IntroSequence:
             else:
                 self.screen.fill((0, 0, 0))
             
-            # Draw start button with hover effect
+            # Draw start button with hover effect and outline
             mouse_pos = pygame.mouse.get_pos()
             button_color = self.start_button_hover_color if self.start_button_rect.collidepoint(mouse_pos) else self.start_button_color
             pygame.draw.rect(self.screen, button_color, self.start_button_rect, border_radius=10)
+            # Add white outline to make button visible against dark backgrounds
+            pygame.draw.rect(self.screen, WHITE, self.start_button_rect, border_radius=10, width=2)
             self.screen.blit(self.start_button_text, self.start_button_text_rect)
             
             pygame.display.flip()
