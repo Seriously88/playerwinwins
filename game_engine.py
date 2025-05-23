@@ -813,7 +813,7 @@ class BadmintonGame:
         self.bombs.append(Bomb(x, y))
 
     def play_victory_video(self):
-        """Play the victory ending video sequence"""
+        """Play the victory ending video sequence with confetti effect"""
         # Open the video file
         video = cv2.VideoCapture('assests/introscene+BGM/victoryendingscene(1).mp4')
         
@@ -827,6 +827,11 @@ class BadmintonGame:
         # Play victory video audio
         if self.victory_video_audio:
             pygame.mixer.Channel(1).play(self.victory_video_audio)
+        
+        # Create confetti effect
+        confetti = Confetti()
+        confetti_start_time = pygame.time.get_ticks()
+        confetti_duration = 4000  # 4 seconds (4000 milliseconds)
             
         while True:
             ret, frame = video.read()
@@ -860,6 +865,12 @@ class BadmintonGame:
             # Display frame
             self.screen.blit(frame, (0, 0))
             
+            # Update and draw confetti if within duration
+            current_time = pygame.time.get_ticks()
+            if current_time - confetti_start_time < confetti_duration:
+                confetti.update()
+                confetti.draw(self.screen)
+            
             # Draw skip button with hover effect
             mouse_pos = pygame.mouse.get_pos()
             button_color = self.next_button_hover_color if self.next_button_rect.collidepoint(mouse_pos) else self.next_button_color
@@ -871,3 +882,68 @@ class BadmintonGame:
             
         video.release()
         return True
+
+class Confetti:
+    def __init__(self):
+        self.particles = []
+        self.colors = [
+            (255, 0, 0),     # Red
+            (0, 255, 0),     # Green
+            (0, 0, 255),     # Blue
+            (255, 255, 0),   # Yellow
+            (255, 0, 255),   # Magenta
+            (0, 255, 255),   # Cyan
+            (255, 165, 0),   # Orange
+            (255, 192, 203), # Pink
+        ]
+        
+    def create_particle(self):
+        x = random.randint(0, WIDTH)
+        y = random.randint(-50, 0)
+        size = random.randint(5, 10)
+        color = random.choice(self.colors)
+        speed_x = random.uniform(-2, 2)
+        speed_y = random.uniform(2, 5)
+        rotation = random.uniform(0, 360)
+        rotation_speed = random.uniform(-5, 5)
+        
+        return {
+            'x': x, 'y': y,
+            'size': size,
+            'color': color,
+            'speed_x': speed_x,
+            'speed_y': speed_y,
+            'rotation': rotation,
+            'rotation_speed': rotation_speed
+        }
+    
+    def update(self):
+        # Add new particles
+        if len(self.particles) < 200:  # Limit total particles
+            for _ in range(5):  # Add 5 particles per frame
+                self.particles.append(self.create_particle())
+        
+        # Update existing particles
+        for particle in self.particles[:]:
+            particle['y'] += particle['speed_y']
+            particle['x'] += particle['speed_x']
+            particle['rotation'] += particle['rotation_speed']
+            
+            # Remove particles that are off screen
+            if particle['y'] > HEIGHT:
+                self.particles.remove(particle)
+    
+    def draw(self, surface):
+        for particle in self.particles:
+            # Create a surface for the rotated rectangle
+            particle_surface = pygame.Surface((particle['size'], particle['size']), pygame.SRCALPHA)
+            pygame.draw.rect(particle_surface, particle['color'], (0, 0, particle['size'], particle['size']))
+            
+            # Rotate the particle
+            rotated_surface = pygame.transform.rotate(particle_surface, particle['rotation'])
+            
+            # Get the rect for positioning
+            rect = rotated_surface.get_rect(center=(particle['x'], particle['y']))
+            
+            # Draw the rotated particle
+            surface.blit(rotated_surface, rect)
