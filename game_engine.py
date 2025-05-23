@@ -112,29 +112,25 @@ class BadmintonGame:
             print(f"Error loading court image: {e}")
             self.court_img = None
         
-        # Victory cutscene variables
+        # Load crowd cheering sound
+        try:
+            self.crowd_cheering = pygame.mixer.Sound('assests/crowd-cheering.wav')
+            self.crowd_cheering.set_volume(0.7)  # Set appropriate volume
+        except Exception as e:
+            print(f"Error loading crowd cheering sound: {e}")
+            self.crowd_cheering = None
+            
+        # Victory sequence variables
         self.victory_sequence = False
         self.victory_sequence_start = 0
         self.current_victory_scene = 0
+        self.crowd_cheer_played = False  # Track if cheer has been played
         
-        # Next button properties - positioned at bottom right with neon colors
-        button_width = 120
-        button_height = 50
-        button_margin = 30  # Margin from screen edges
-        self.next_button_rect = pygame.Rect(
-            WIDTH - button_width - button_margin,  # X position from right
-            HEIGHT - button_height - button_margin,  # Y position from bottom
-            button_width,
-            button_height
-        )
-        
-        # Neon blue colors for normal and hover states
-        self.next_button_color = (0, 195, 255)  # Bright neon blue
-        self.next_button_hover_color = (80, 220, 255)  # Lighter neon blue
-        self.next_button_glow_color = (0, 150, 255, 128)  # Semi-transparent glow
-        
-        # Button text with neon effect
-        self.next_button_font = pygame.font.SysFont(None, 40)
+        # Next button properties - positioned at bottom right
+        self.next_button_rect = pygame.Rect(WIDTH - 150, HEIGHT - 80, 100, 40)
+        self.next_button_color = (0, 255, 255)  # Neon cyan
+        self.next_button_hover_color = (0, 200, 255)  # Slightly darker for hover
+        self.next_button_font = pygame.font.SysFont(None, 36)
         self.next_button_text = self.next_button_font.render("Next", True, WHITE)
         self.next_button_text_rect = self.next_button_text.get_rect(center=self.next_button_rect.center)
         
@@ -159,19 +155,40 @@ class BadmintonGame:
         except Exception as e:
             print(f"Error loading losing scene: {e}")
             self.losing_cutscene = None
+        
+        # Restart button properties - bigger and centered
+        self.restart_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2, 200, 70)  # Increased size and centered
+        self.restart_button_color = (255, 215, 0)  # Golden color
+        self.restart_button_hover_color = (255, 255, 0)  # Bright yellow
+        self.restart_button_font = pygame.font.SysFont(None, 60)  # Increased font size
+        self.restart_button_text = self.restart_button_font.render("Restart", True, (0, 0, 0))
+        self.restart_button_text_rect = self.restart_button_text.get_rect(center=self.restart_button_rect.center)
+        
+        # Victory dialog texts
+        self.victory_dialog_font = pygame.font.SysFont(None, 48)
+        self.victory_dialog = self.victory_dialog_font.render("Finally, Alex has won the ultimate sport quest", True, (255, 255, 255))
+        self.victory_dialog_rect = self.victory_dialog.get_rect(center=(WIDTH//2, HEIGHT - 100))
+        
+        # Second victory dialog
+        self.victory_dialog2 = self.victory_dialog_font.render("!!! Alex Shock!! ", True, (255, 255, 255))
+        self.victory_dialog2_rect = self.victory_dialog2.get_rect(center=(WIDTH//2, HEIGHT - 100))
     
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
             
-            # Handle mouse clicks for Next button during victory sequence
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
-                if self.victory_sequence and self.next_button_rect.collidepoint(event.pos):
+                if self.match_over and self.player_lives <= 0:
+                    if self.restart_button_rect.collidepoint(event.pos):
+                        self.reset_game(full_reset=True)
+                elif self.victory_sequence and self.next_button_rect.collidepoint(event.pos):
                     self.advance_victory_scene()
             
-            # Handle key presses only when game is active
-            if event.type == pygame.KEYDOWN and not self.victory_sequence:
+            # Handle key presses
+            if event.type == pygame.KEYDOWN:
+
+                
                 # Serve with spacebar
                 if self.game_state == SERVE_STATE and event.key == pygame.K_SPACE and self.player_serves and not self.match_over and self.serving:
                     # Set initial velocity for proper animation instead of teleporting
@@ -194,7 +211,7 @@ class BadmintonGame:
                 
                 # Restart match with R key
                 if event.key == pygame.K_r and self.match_over:
-                    self.reset_game(full_reset=True)
+                    self.reset_game(full_reset=True)  # Full reset when match is over
                 
                 # Display controls with H key
                 if event.key == pygame.K_h:
@@ -232,192 +249,192 @@ class BadmintonGame:
             
             # Update button hover effect
             mouse_pos = pygame.mouse.get_pos()
-            self.next_button_color = self.next_button_hover_color if self.next_button_rect.collidepoint(mouse_pos) else (0, 195, 255)
+            self.next_button_color = (0, 200, 255) if self.next_button_rect.collidepoint(mouse_pos) else (0, 255, 255)
             
+            return
+            
+        # Regular game updates
+        keys = pygame.key.get_pressed()
+        self.player.handle_input(keys)
+        
+        # Update feedback timer
+        if self.feedback_timer > 0:
+            self.feedback_timer -= 1
+        
+        # Update players
+        self.player.update()
+        
+        # Update and check coin collection
+        self.update_coins()
+        
+        # Track shuttlecock crossing from player to NPC side
+        if self.shuttle.vx > 0 and self.shuttle.x > NET_X:
+            # Shuttle is crossing from player to NPC side or continues to be on NPC side
+            self.npc.track_shuttlecock(self.shuttle, self.player)
+        elif self.shuttle.vx < 0 and self.shuttle.x < NET_X:
+            # Player should prepare to receive
+            pass
+        else:
+            # Always track shuttlecock position for better NPC awareness
+            self.npc.track_shuttlecock(self.shuttle, self.player)
+        
+        # Update NPC with AI behavior
+        self.npc.update()
+        
+        # Don't proceed with game logic if match is over
+        if self.match_over:
             return
         
-        # Don't process game updates if match is over
-        if self.match_over and not self.victory_sequence:
-            return
+        # Update shuttlecock position in all states
+        if not self.serving:
+            self.shuttle.update()
             
-        # Regular game updates - only process if game is active
-        if not self.match_over:
-            keys = pygame.key.get_pressed()
-            self.player.handle_input(keys)
-            
-            # Update and check coin collection
-            self.update_coins()
-            
-            # Update players
-            self.player.update()
-            
-            # Update and check coin collection
-            self.update_coins()
-            
-            # Track shuttlecock crossing from player to NPC side
-            if self.shuttle.vx > 0 and self.shuttle.x > NET_X:
-                # Shuttle is crossing from player to NPC side or continues to be on NPC side
-                self.npc.track_shuttlecock(self.shuttle, self.player)
-            elif self.shuttle.vx < 0 and self.shuttle.x < NET_X:
-                # Player should prepare to receive
-                pass
-            else:
-                # Always track shuttlecock position for better NPC awareness
-                self.npc.track_shuttlecock(self.shuttle, self.player)
-            
-            # Update NPC with AI behavior
-            self.npc.update()
-            
-            # Update shuttlecock position in all states
-            if not self.serving:
-                self.shuttle.update()
+            # If we're in serve state and shuttlecock is moving, transition to play state
+            if self.game_state == SERVE_STATE:
+                self.game_state = PLAY_STATE
+        
+        # Check for racket hits
+        if self.game_state == PLAY_STATE:
+            # Check if player hits shuttlecock
+            if self.player.hit_shuttlecock(self.shuttle):
+                # Update possession - shuttle now belongs to player
+                self.shuttle_in_possession = "player"
                 
-                # If we're in serve state and shuttlecock is moving, transition to play state
-                if self.game_state == SERVE_STATE:
-                    self.game_state = PLAY_STATE
-            
-            # Check for racket hits
-            if self.game_state == PLAY_STATE:
-                # Check if player hits shuttlecock
-                if self.player.hit_shuttlecock(self.shuttle):
-                    # Update possession - shuttle now belongs to player
-                    self.shuttle_in_possession = "player"
-                    
-                    # Play hit sound effect
-                    if self.hit_sound:
-                        # Play the sound with pitch variation based on shot type
-                        pitch = 1.0  # Default pitch
-                        if self.player.swing_type == "smash":
-                            pitch = 1.2  # Higher pitch for smash
-                        elif self.player.swing_type == "drop":
-                            pitch = 0.8  # Lower pitch for drop shot
-                        
-                        # Use a channel to control pitch (pygame doesn't directly support pitch)
-                        # Instead, we play at normal pitch but use different volumes for shot types
-                        channel = pygame.mixer.find_channel()
-                        if channel:
-                            channel.set_volume(0.7 * (pitch if pitch > 1.0 else 1.0))
-                            channel.play(self.hit_sound)
-                    
+                # Play hit sound effect
+                if self.hit_sound:
+                    # Play the sound with pitch variation based on shot type
+                    pitch = 1.0  # Default pitch
                     if self.player.swing_type == "smash":
-                        self.show_feedback("SMASH!", (255, 0, 0))
+                        pitch = 1.2  # Higher pitch for smash
                     elif self.player.swing_type == "drop":
-                        self.show_feedback("Drop Shot", (0, 255, 255))
-                    else:
-                        self.show_feedback("Hit!", GREEN)
+                        pitch = 0.8  # Lower pitch for drop shot
+                    
+                    # Use a channel to control pitch (pygame doesn't directly support pitch)
+                    # Instead, we play at normal pitch but use different volumes for shot types
+                    channel = pygame.mixer.find_channel()
+                    if channel:
+                        channel.set_volume(0.7 * (pitch if pitch > 1.0 else 1.0))
+                        channel.play(self.hit_sound)
                 
-                # Check if NPC hits shuttlecock
-                if self.npc.hit_shuttlecock(self.shuttle):
-                    # Update possession - shuttle now belongs to NPC
-                    self.shuttle_in_possession = "npc"
-                    
-                    # Play hit sound effect with different characteristics for NPC
-                    if self.hit_sound:
-                        # Use slightly different pitch/volume for NPC hits
-                        pitch = 1.0  # Default pitch
-                        if self.npc.swing_type == "smash":
-                            pitch = 1.3  # Higher pitch for smash
-                        elif self.npc.swing_type == "drop":
-                            pitch = 0.9  # Lower pitch for drop shot
-                        
-                        # Use a channel to control volume
-                        channel = pygame.mixer.find_channel()
-                        if channel:
-                            channel.set_volume(0.6 * (pitch if pitch > 1.0 else 1.0))
-                            channel.play(self.hit_sound)
-                    
+                if self.player.swing_type == "smash":
+                    self.show_feedback("SMASH!", (255, 0, 0))
+                elif self.player.swing_type == "drop":
+                    self.show_feedback("Drop Shot", (0, 255, 255))
+                else:
+                    self.show_feedback("Hit!", GREEN)
+            
+            # Check if NPC hits shuttlecock
+            if self.npc.hit_shuttlecock(self.shuttle):
+                # Update possession - shuttle now belongs to NPC
+                self.shuttle_in_possession = "npc"
+                
+                # Play hit sound effect with different characteristics for NPC
+                if self.hit_sound:
+                    # Use slightly different pitch/volume for NPC hits
+                    pitch = 1.0  # Default pitch
                     if self.npc.swing_type == "smash":
-                        self.show_feedback("NPC SMASH!", (255, 100, 100))
+                        pitch = 1.3  # Higher pitch for smash
                     elif self.npc.swing_type == "drop":
-                        self.show_feedback("NPC Drop", (100, 200, 255))
+                        pitch = 0.9  # Lower pitch for drop shot
+                    
+                    # Use a channel to control volume
+                    channel = pygame.mixer.find_channel()
+                    if channel:
+                        channel.set_volume(0.6 * (pitch if pitch > 1.0 else 1.0))
+                        channel.play(self.hit_sound)
                 
-                # Check if shuttlecock hits the ground, goes out of bounds, or hits the net
-                if self.shuttle.is_grounded() or self.shuttle.out_of_bounds:
-                    # Reset shuttle possession
-                    self.shuttle_in_possession = "none"
-                    
-                    # Award point based on where the fault occurred
-                    if self.shuttle.is_grounded():
-                        # Point goes to opposite side of where shuttlecock landed
-                        if self.shuttle.x < NET_X:
-                            # Point for NPC if shuttle lands in player's court
-                            self.npc_score += 1
-                            self.player_serves = False
-                            self.show_feedback("Point for NPC!", RED)
-                            
-                            # Check if player loses a life
-                            if self.npc_score % 10 == 0:  # Lose a life every 10 points
-                                self.player_lives -= 1
-                                self.show_feedback(f"Player lost a life! Lives: {self.player_lives}", RED, 120)
-                                # Reset scores after life loss
-                                self.player_score = 0
-                                self.npc_score = 0
-                        else:
-                            # Point for player if shuttle lands in NPC's court
-                            self.player_score += 1
-                            self.player_serves = True
-                            self.show_feedback("Point for Player!", BLUE)
-                            
-                            # Track consecutive player wins for coin spawning
-                            self.consecutive_wins += 1
-                            
-                            # Spawn coins after two consecutive wins
-                            if self.consecutive_wins >= 2:
-                                self.spawn_coins(3)  # Spawn 3 coins
-                                self.consecutive_wins = 0  # Reset counter
-                    elif self.shuttle.out_of_bounds:
-                        # Point goes to the side that didn't hit it last
-                        # We'll determine this based on the direction the shuttle was moving
-                        if self.shuttle.vx > 0:
-                            # Shuttle was moving right (toward NPC), so last hit by player
-                            self.npc_score += 1
-                            self.player_serves = False
-                            self.show_feedback("Out of bounds! Point for NPC", RED)
-                            
-                            # Check if player loses a life
-                            if self.npc_score % 10 == 0:  # Lose a life every 10 points
-                                self.player_lives -= 1
-                                self.show_feedback(f"Player lost a life! Lives: {self.player_lives}", RED, 120)
-                                # Reset scores after life loss
-                                self.player_score = 0
-                                self.npc_score = 0
-                        else:
-                            # Shuttle was moving left (toward player), so last hit by NPC
-                            self.player_score += 1
-                            self.player_serves = True
-                            self.show_feedback("Out of bounds! Point for Player", BLUE)
-                            
-                            # Track consecutive player wins for coin spawning
-                            self.consecutive_wins += 1
-                            
-                            # Spawn coins after two consecutive wins
-                            if self.consecutive_wins >= 2:
-                                self.spawn_coins(3)  # Spawn 3 coins
-                                self.consecutive_wins = 0  # Reset counter
-                    
-                    # Check if match has been won due to lives
-                    if self.player_lives <= 0:
-                        self.match_over = True
-                        self.show_feedback("Game Over! Player is out of lives!", RED, 120)
+                if self.npc.swing_type == "smash":
+                    self.show_feedback("NPC SMASH!", (255, 100, 100))
+                elif self.npc.swing_type == "drop":
+                    self.show_feedback("NPC Drop", (100, 200, 255))
+            
+            # Check if shuttlecock hits the ground, goes out of bounds, or hits the net
+            if self.shuttle.is_grounded() or self.shuttle.out_of_bounds:
+                # Reset shuttle possession
+                self.shuttle_in_possession = "none"
+                
+                # Award point based on where the fault occurred
+                if self.shuttle.is_grounded():
+                    # Point goes to opposite side of where shuttlecock landed
+                    if self.shuttle.x < NET_X:
+                        # Point for NPC if shuttle lands in player's court
+                        self.npc_score += 1
+                        self.player_serves = False
+                        self.show_feedback("Point for NPC!", RED)
+                        
+                        # Check if player loses a life
+                        if self.npc_score % 10 == 0:  # Lose a life every 10 points
+                            self.player_lives -= 1
+                            self.show_feedback(f"Player lost a life! Lives: {self.player_lives}", RED, 120)
+                            # Reset scores after life loss
+                            self.player_score = 0
+                            self.npc_score = 0
                     else:
-                        # Check if match has been won by score
-                        winner = check_win_condition(self.player_score, self.npc_score)
-                        if winner:
-                            self.match_over = True
-                            self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
-                            
-                            # Player victory event
-                            if winner == "Player":
-                                pass  # No video cutscene
-                    
-                    # Reset for next serve
-                    self.game_state = SERVE_STATE
-                    self.serving = True
-                    
-                    # Reset shuttlecock for next serve
-                    self.shuttle.out_of_bounds = False
-                    self.shuttle.vx = 0
-                    self.shuttle.vy = 0
+                        # Point for player if shuttle lands in NPC's court
+                        self.player_score += 1
+                        self.player_serves = True
+                        self.show_feedback("Point for Player!", BLUE)
+                        
+                        # Track consecutive player wins for coin spawning
+                        self.consecutive_wins += 1
+                        
+                        # Spawn coins after two consecutive wins
+                        if self.consecutive_wins >= 2:
+                            self.spawn_coins(3)  # Spawn 3 coins
+                            self.consecutive_wins = 0  # Reset counter
+                elif self.shuttle.out_of_bounds:
+                    # Point goes to the side that didn't hit it last
+                    # We'll determine this based on the direction the shuttle was moving
+                    if self.shuttle.vx > 0:
+                        # Shuttle was moving right (toward NPC), so last hit by player
+                        self.npc_score += 1
+                        self.player_serves = False
+                        self.show_feedback("Out of bounds! Point for NPC", RED)
+                        
+                        # Check if player loses a life
+                        if self.npc_score % 10 == 0:  # Lose a life every 10 points
+                            self.player_lives -= 1
+                            self.show_feedback(f"Player lost a life! Lives: {self.player_lives}", RED, 120)
+                            # Reset scores after life loss
+                            self.player_score = 0
+                            self.npc_score = 0
+                    else:
+                        # Shuttle was moving left (toward player), so last hit by NPC
+                        self.player_score += 1
+                        self.player_serves = True
+                        self.show_feedback("Out of bounds! Point for Player", BLUE)
+                        
+                        # Track consecutive player wins for coin spawning
+                        self.consecutive_wins += 1
+                        
+                        # Spawn coins after two consecutive wins
+                        if self.consecutive_wins >= 2:
+                            self.spawn_coins(3)  # Spawn 3 coins
+                            self.consecutive_wins = 0  # Reset counter
+                
+                # Check if match has been won due to lives
+                if self.player_lives <= 0:
+                    self.match_over = True
+                    self.show_feedback("Game Over! Player is out of lives!", RED, 120)
+                else:
+                    # Check if match has been won by score
+                    winner = check_win_condition(self.player_score, self.npc_score)
+                    if winner:
+                        self.match_over = True
+                        self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
+                        
+                        # Player victory event
+                        if winner == "Player":
+                            pass  # No video cutscene
+                
+                # Reset for next serve
+                self.game_state = SERVE_STATE
+                self.serving = True
+                
+                # Reset shuttlecock for next serve
+                self.shuttle.out_of_bounds = False
+                self.shuttle.vx = 0
+                self.shuttle.vy = 0
         
         # Auto-serve for NPC after a delay
         elif self.game_state == SERVE_STATE and not self.player_serves and self.serving:
@@ -452,25 +469,19 @@ class BadmintonGame:
             self.screen.fill(BLACK)
             self.screen.blit(self.victory_scenes[self.current_victory_scene], (0, 0))
             
-            # Draw Next button with neon glow effect
-            # Draw outer glow
-            glow_rect = self.next_button_rect.inflate(8, 8)  # Slightly larger rect for glow
-            pygame.draw.rect(self.screen, self.next_button_glow_color, glow_rect, border_radius=12)
+            # Play crowd cheering on first scene
+            if self.current_victory_scene == 0 and not self.crowd_cheer_played and self.crowd_cheering:
+                self.crowd_cheering.play(-1)  # -1 means loop indefinitely
+                self.crowd_cheer_played = True
+                
+            # Show appropriate dialog based on current scene
+            if self.current_victory_scene == 0:
+                self.screen.blit(self.victory_dialog, self.victory_dialog_rect)
+            elif self.current_victory_scene == 1:
+                self.screen.blit(self.victory_dialog2, self.victory_dialog2_rect)
             
-            # Draw main button
+            # Draw Next button
             pygame.draw.rect(self.screen, self.next_button_color, self.next_button_rect, border_radius=10)
-            
-            # Add button border for more neon effect
-            pygame.draw.rect(self.screen, WHITE, self.next_button_rect, width=2, border_radius=10)
-            
-            # Draw text with slight offset for shadow effect
-            shadow_text = self.next_button_font.render("Next", True, (0, 0, 0, 128))
-            shadow_rect = self.next_button_text_rect.copy()
-            shadow_rect.x += 2
-            shadow_rect.y += 2
-            self.screen.blit(shadow_text, shadow_rect)
-            
-            # Draw main text
             self.screen.blit(self.next_button_text, self.next_button_text_rect)
             
             pygame.display.flip()
@@ -552,14 +563,18 @@ class BadmintonGame:
         
         # Display match result if over
         if self.match_over:
-            # Clear the screen first
             self.screen.fill(BLACK)
             
             if self.player_lives <= 0 and self.losing_cutscene:
                 # Display the losing scene image
                 self.screen.blit(self.losing_cutscene, (0, 0))
-                # Show restart message for losing scene only
-                display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
+                
+                # Draw restart button with hover effect
+                mouse_pos = pygame.mouse.get_pos()
+                button_color = self.restart_button_hover_color if self.restart_button_rect.collidepoint(mouse_pos) else self.restart_button_color
+                pygame.draw.rect(self.screen, button_color, self.restart_button_rect, border_radius=10)
+                self.screen.blit(self.restart_button_text, self.restart_button_text_rect)
+            
             elif self.player_score > self.npc_score and self.victory_scenes:
                 # Start victory sequence
                 if not self.victory_sequence:
@@ -599,6 +614,7 @@ class BadmintonGame:
             self.match_over = False
             self.game_over_played = False  # Reset sound flag
             self.victory_played = False    # Reset victory sound flag
+            self.crowd_cheer_played = False  # Reset crowd cheer flag
             
             # Reset coin system on full game reset
             self.consecutive_wins = 0
@@ -686,8 +702,11 @@ class BadmintonGame:
     def advance_victory_scene(self):
         """Advance to the next victory scene or end sequence"""
         if self.current_victory_scene < 3:
+            # Stop crowd cheering when moving from first scene
+            if self.current_victory_scene == 0 and self.crowd_cheering:
+                self.crowd_cheering.stop()
             self.current_victory_scene += 1
-            self.victory_sequence_start = pygame.time.get_ticks()  # Reset timer for new scene
+            self.victory_sequence_start = pygame.time.get_ticks()
         else:
             # End of sequence, reset game
             self.reset_game(full_reset=True)
