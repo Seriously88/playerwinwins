@@ -172,9 +172,13 @@ class BadmintonGame:
         try:
             self.losing_cutscene = pygame.image.load('assests/cutscenes/losingscene.png')
             self.losing_cutscene = pygame.transform.scale(self.losing_cutscene, (WIDTH, HEIGHT))
+            # Load losing scene sound effect
+            self.losing_sound = pygame.mixer.Sound('assests/Game Over _ 01 - ASMR - Free Sound Effects (online-audio-converter.com).wav')
+            self.losing_sound.set_volume(0.8)  # Set appropriate volume
         except Exception as e:
-            print(f"Error loading losing scene: {e}")
+            print(f"Error loading losing scene assets: {e}")
             self.losing_cutscene = None
+            self.losing_sound = None
         
         # Restart button properties - bigger and centered
         self.restart_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2, 200, 70)  # Increased size and centered
@@ -606,6 +610,11 @@ class BadmintonGame:
             if self.player_lives <= 0 and self.losing_cutscene:
                 # Display the losing scene image
                 self.screen.blit(self.losing_cutscene, (0, 0))
+                
+                # Play losing sound if not already played
+                if not self.game_over_played and self.losing_sound:
+                    self.losing_sound.play()
+                    self.game_over_played = True
                 
                 # Draw restart button with hover effect
                 mouse_pos = pygame.mouse.get_pos()
