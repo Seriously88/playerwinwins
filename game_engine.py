@@ -502,35 +502,15 @@ class BadmintonGame:
             display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
         
         pygame.display.flip()
-
+    
     def run(self):
         while self.running:
             self.clock.tick(60)
             self.handle_events()
             self.update()
-
-            RALLY_STATE = 1
-
-
-            # Randomly trigger white flash once
-            if not self.flash_triggered and self.game_state == RALLY_STATE and random.random() < 0.001:
-                self.flash_triggered = True
-                self.flash_timer = self.flash_duration
-
             self.draw()
-
-            # Flash screen effect if timer is running   
-            if self.flash_timer > 0:
-                flash_overlay = pygame.Surface((WIDTH,HEIGHT))
-                flash_overlay.fill((255, 255, 255))
-                flash_overlay.set_alpha(255)  # Full opacity
-                self.screen.blit(flash_overlay, (0, 0))
-                self.flash_timer -= 1
-
-            pygame.display.flip()
-
+        
         pygame.quit()
-
 
     def reset_game(self, full_reset=False):
         """Reset the game state after losing a life. 
