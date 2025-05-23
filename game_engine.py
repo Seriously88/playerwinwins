@@ -180,7 +180,7 @@ class BadmintonGame:
         self.restart_button_color = (255, 215, 0)  # Gold color
         self.restart_button_hover_color = (255, 255, 0)  # Bright yellow for hover
         self.restart_button_font = pygame.font.SysFont(None, 48)
-        self.restart_button_text = self.restart_button_font.render("Restart Game", True, (0, 0, 0))
+        self.restart_button_text = self.restart_button_font.render("Restart", True, (0, 0, 0))
         self.restart_button_text_rect = self.restart_button_text.get_rect(center=self.restart_button_rect.center)
         
         # Track if losing sound has been played
@@ -224,6 +224,28 @@ class BadmintonGame:
         except Exception as e:
             print(f"Error loading bomb hit sound: {e}")
             self.bomb_hit_sound = None
+        
+        # Victory freeze frame variables
+        self.freeze_frame = False
+        self.freeze_frame_surface = None
+        self.freeze_frame_start = 0
+        self.freeze_frame_duration = 3000  # 3 seconds in milliseconds
+        self.zoom_scale = 1.0
+        self.zoom_target = 3.0  # Maximum zoom level
+        self.zoom_speed = 0.01  # Slower zoom-in speed
+        self.zoom_out_speed = 0.06  # Faster zoom-out speed
+        self.slow_motion_frames = []  # Store frames for slow motion
+        self.frame_index = 0
+        self.last_frame_time = 0
+        self.slow_motion_interval = 100  # Milliseconds between slow-motion frames
+        
+        # Dark overlay for losing scene
+        self.dark_overlay = pygame.Surface((WIDTH, HEIGHT))
+        self.dark_overlay.fill((0, 0, 0))
+        self.dark_overlay.set_alpha(180)  # Adjust transparency (0-255)
+        self.overlay_fade_start = 0
+        self.overlay_fade_duration = 1000  # 1 second fade in
+        self.current_overlay_alpha = 0
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -503,15 +525,8 @@ class BadmintonGame:
                     self.match_over = True
                     self.show_feedback("Game Over! Player is out of lives!", RED, 120)
                 else:
-                    # Check if match has been won by score
-                    winner = check_win_condition(self.player_score, self.npc_score)
-                    if winner:
-                        self.match_over = True
-                        self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
-                        
-                        # Player victory event
-                        if winner == "Player":
-                            pass  # No video cutscene
+                    # Check if match has been won
+                    self.check_win_condition()
                 
                 # Reset for next serve
                 self.game_state = SERVE_STATE
@@ -554,6 +569,14 @@ class BadmintonGame:
         if self.victory_sequence:
             if not hasattr(self, 'victory_video_played'):
                 self.victory_video_played = False
+                
+            if self.freeze_frame:
+                self.draw_freeze_frame()
+                if self.update_freeze_frame():
+                    # Freeze frame is done, proceed to victory video
+                    self.victory_video_played = False
+                pygame.display.flip()
+                return
             
             if not self.victory_video_played:
                 self.victory_video_played = True
@@ -658,14 +681,43 @@ class BadmintonGame:
                 if self.losing_scene:
                     self.screen.blit(self.losing_scene, (0, 0))
                     
+                    # Calculate and update overlay alpha for fade effect
+                    if not hasattr(self, 'overlay_fade_start'):
+                        self.overlay_fade_start = pygame.time.get_ticks()
+                    
+                    current_time = pygame.time.get_ticks()
+                    elapsed = current_time - self.overlay_fade_start
+                    
+                    if elapsed < self.overlay_fade_duration:
+                        # Gradually increase alpha during fade-in
+                        self.current_overlay_alpha = int((elapsed / self.overlay_fade_duration) * 180)
+                    else:
+                        self.current_overlay_alpha = 180
+                    
+                    # Apply dark overlay with current alpha
+                    self.dark_overlay.set_alpha(self.current_overlay_alpha)
+                    self.screen.blit(self.dark_overlay, (0, 0))
+                    
                     # Play losing sound if not already played
                     if not self.losing_sound_played and self.losing_sound:
+                        pygame.mixer.stop()  # Stop any playing sounds
+                        pygame.mixer.music.stop()  # Stop background music
                         self.losing_sound.play()
                         self.losing_sound_played = True
                     
-                    # Draw restart button with hover effect
+                    # Create a surface for the button area
+                    button_surface = pygame.Surface((self.restart_button_rect.width + 20, 
+                                                   self.restart_button_rect.height + 20))
+                    button_surface.fill((0, 0, 0))
+                    button_surface.set_alpha(0)  # Make button background transparent
+                    
+                    # Draw restart button with hover effect and glow
                     mouse_pos = pygame.mouse.get_pos()
                     button_color = self.restart_button_hover_color if self.restart_button_rect.collidepoint(mouse_pos) else self.restart_button_color
+                    
+                    # Draw button with glow effect
+                    glow_rect = self.restart_button_rect.inflate(10, 10)
+                    pygame.draw.rect(self.screen, (255, 255, 100, 128), glow_rect, border_radius=15)
                     pygame.draw.rect(self.screen, button_color, self.restart_button_rect, border_radius=10)
                     self.screen.blit(self.restart_button_text, self.restart_button_text_rect)
 
@@ -733,6 +785,10 @@ class BadmintonGame:
             
             # Restore background music volume
             pygame.mixer.music.set_volume(MUSIC_VOLUME)
+            
+            # Reset overlay fade effect
+            self.overlay_fade_start = 0
+            self.current_overlay_alpha = 0
         
         # Reset game state
         self.game_state = SERVE_STATE
@@ -882,6 +938,101 @@ class BadmintonGame:
             
         video.release()
         return True
+
+    def start_victory_freeze_frame(self):
+        """Capture multiple frames for slow motion effect"""
+        self.freeze_frame = True
+        self.freeze_frame_start = pygame.time.get_ticks()
+        self.zoom_scale = 1.0
+        self.slow_motion_frames = []
+        
+        # Capture multiple frames for slow motion
+        original_frame = self.screen.copy()
+        self.slow_motion_frames = [original_frame] * 10  # Create copies for slow motion
+        self.frame_index = 0
+        self.last_frame_time = pygame.time.get_ticks()
+
+    def update_freeze_frame(self):
+        """Update the freeze frame zoom effect with slow motion during zoom-in"""
+        if not self.freeze_frame:
+            return False
+
+        current_time = pygame.time.get_ticks()
+        elapsed_time = current_time - self.freeze_frame_start
+
+        # Update zoom scale with different speeds for zoom-in and zoom-out
+        if elapsed_time < self.freeze_frame_duration * 0.7:  # First 70%: slow zoom-in
+            self.zoom_scale = min(self.zoom_scale + self.zoom_speed, self.zoom_target)
+            # Update frame index for slow motion
+            if current_time - self.last_frame_time >= self.slow_motion_interval:
+                self.frame_index = (self.frame_index + 1) % len(self.slow_motion_frames)
+                self.last_frame_time = current_time
+        else:  # Last 30%: fast zoom-out
+            self.zoom_scale = max(1.0, self.zoom_scale - self.zoom_out_speed)
+            self.frame_index = 0  # Use original frame during zoom-out
+
+        # Check if freeze frame duration is over
+        if elapsed_time >= self.freeze_frame_duration:
+            self.freeze_frame = False
+            self.slow_motion_frames = []  # Clear stored frames
+            return True
+        return False
+
+    def draw_freeze_frame(self):
+        """Draw the zoomed freeze frame with slow motion effect"""
+        if not self.freeze_frame or not self.slow_motion_frames:
+            return
+
+        # Get the current frame for rendering
+        current_frame = self.slow_motion_frames[self.frame_index]
+
+        # Calculate zoom parameters
+        orig_width = current_frame.get_width()
+        orig_height = current_frame.get_height()
+
+        # Calculate the viewport that will be visible after zoom
+        viewport_width = WIDTH / self.zoom_scale
+        viewport_height = HEIGHT / self.zoom_scale
+
+        # Calculate the region to focus on (player's position)
+        player_x = self.player.rect.centerx
+        player_y = self.player.rect.centery
+
+        # Calculate source rectangle (the area we want to zoom in on)
+        source_x = max(0, min(player_x - viewport_width/2, WIDTH - viewport_width))
+        source_y = max(0, min(player_y - viewport_height/2, HEIGHT - viewport_height))
+        source_rect = pygame.Rect(source_x, source_y, viewport_width, viewport_height)
+
+        # Clear the screen
+        self.screen.fill((0, 0, 0))
+
+        # Create a subsurface of the area we want to zoom
+        try:
+            zoom_area = current_frame.subsurface(source_rect)
+            # Scale it up
+            zoomed_surface = pygame.transform.scale(zoom_area, (WIDTH, HEIGHT))
+            # Draw the zoomed surface
+            self.screen.blit(zoomed_surface, (0, 0))
+        except ValueError:
+            # Fallback if subsurface is out of bounds
+            self.screen.blit(current_frame, (0, 0))
+
+    def check_win_condition(self):
+        """Check if the match has been won and handle victory sequence"""
+        winner = check_win_condition(self.player_score, self.npc_score)
+        if winner:
+            self.match_over = True
+            self.show_feedback(f"{winner} wins the match!", GREEN if winner == "Player" else RED, 120)
+            
+            # Player victory event
+            if winner == "Player":
+                self.victory_sequence = True
+                # Start the freeze frame effect
+                self.start_victory_freeze_frame()
+                
+                # Play victory sound
+                if self.victory_sound:
+                    self.victory_sound.play()
 
 class Confetti:
     def __init__(self):
