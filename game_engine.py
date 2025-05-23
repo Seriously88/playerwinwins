@@ -5,6 +5,7 @@ from config import *
 from player import Player, NPC
 from shuttle import Shuttlecock
 from coin import Coin
+from bomb import Bomb
 from utils import draw_court, display_message, check_win_condition
 
 
@@ -211,9 +212,22 @@ class BadmintonGame:
         # Flash effect variables
         self.flash_effect = False
         self.flash_start_time = 0
-        self.flash_duration = 4000  # Changed to 4 seconds (4000 milliseconds)
+        self.flash_duration = 2000  # Changed back to 2 seconds (2000 milliseconds)
         self.flash_intensity = 0
         self.flash_speed = 15  # Speed of flash pulsing
+        
+        # Bomb system
+        self.bombs = []
+        self.bomb_spawn_timer = 0
+        self.bomb_spawn_interval = 300  # Spawn a bomb every ~5 seconds
+        
+        # Load bomb hit sound
+        try:
+            self.bomb_hit_sound = pygame.mixer.Sound('assests/bomb_hit.wav')
+            self.bomb_hit_sound.set_volume(SFX_VOLUME * 1.2)
+        except Exception as e:
+            print(f"Error loading bomb hit sound: {e}")
+            self.bomb_hit_sound = None
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -290,6 +304,32 @@ class BadmintonGame:
             self.consecutive_wins = 0
     
     def update(self):
+        current_time = pygame.time.get_ticks()
+        
+        # Update bomb spawn timer
+        self.bomb_spawn_timer += 1
+        if self.bomb_spawn_timer >= self.bomb_spawn_interval:
+            self.spawn_bomb()
+            self.bomb_spawn_timer = 0
+            
+        # Update and check bomb collisions
+        for bomb in self.bombs[:]:  # Use slice to avoid modification during iteration
+            bomb.update()
+            
+            # Check for collision with player
+            if bomb.collides_with_player(self.player.rect):
+                coin_penalty = bomb.hit()
+                self.coin_count = max(0, self.coin_count + coin_penalty)  # Don't go below 0
+                self.show_feedback("Lost 5 coins!", (255, 0, 0), 120)
+                
+                # Play bomb hit sound
+                if self.bomb_hit_sound:
+                    pygame.mixer.Channel(3).play(self.bomb_hit_sound)
+            
+            # Remove bombs that are marked for removal
+            if bomb.should_remove:
+                self.bombs.remove(bomb)
+        
         # Get the current time for cutscene timing
         current_time = pygame.time.get_ticks()
         
@@ -626,6 +666,10 @@ class BadmintonGame:
             display_message(self.screen, f"First to {POINTS_TO_WIN} wins. Must win by {MIN_POINT_DIFFERENCE} clear points.", 
                            (50, HEIGHT - 40), 20)
         
+        # Draw all bombs
+        for bomb in self.bombs:
+            bomb.draw(self.screen)
+        
         # Display match result if over
         if self.match_over:
             self.screen.fill(BLACK)
@@ -701,6 +745,10 @@ class BadmintonGame:
             
             # Reset coin system on full game reset
             self.coin_count = 0
+            
+            # Reset bomb system
+            self.bombs.clear()
+            self.bomb_spawn_timer = 0
             
             # Restart background music if it was stopped
             if not self.music_playing:
@@ -807,3 +855,10 @@ class BadmintonGame:
             self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}
             # End of sequence, reset game
             self.reset_game(full_reset=True)
+
+    def spawn_bomb(self):
+        """Spawn a bomb at a random position above the player's side of the court"""
+        # Only spawn between left court edge and net (player's side)
+        x = random.randint(COURT_LEFT + 50, NET_X - 50)
+        y = -20  # Start above the screen
+        self.bombs.append(Bomb(x, y))

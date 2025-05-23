@@ -3,6 +3,60 @@ import random
 import math
 from config import *
 
+class CoinBurst:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.particles = []
+        self.alive = True
+        self.lifetime = 60  # Animation frames
+        self.current_frame = 0
+        
+        # Create particles
+        for _ in range(10):  # 8 particles in the burst
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(2, 5)
+            self.particles.append({
+                'x': x,
+                'y': y,
+                'vx': math.cos(angle) * speed,
+                'vy': math.sin(angle) * speed,
+                'alpha': 255,  # Start fully opaque
+                'size': random.uniform(5, 10)  # Random particle sizes
+            })
+    
+    def update(self):
+        if not self.alive:
+            return
+        
+        self.current_frame += 1
+        if self.current_frame >= self.lifetime:
+            self.alive = False
+            return
+            
+        # Update each particle
+        for particle in self.particles:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            # Fade out
+            particle['alpha'] = max(0, 255 * (1 - self.current_frame / self.lifetime))
+    
+    def draw(self, surface):
+        if not self.alive:
+            return
+            
+        for particle in self.particles:
+            # Create a surface for the particle with alpha channel
+            particle_surface = pygame.Surface((particle['size'], particle['size']), pygame.SRCALPHA)
+            # Gold color with current alpha
+            color = (255, 215, 0, int(particle['alpha']))
+            pygame.draw.circle(particle_surface, color, 
+                             (particle['size']/2, particle['size']/2), 
+                             particle['size']/2)
+            surface.blit(particle_surface, 
+                        (particle['x'] - particle['size']/2, 
+                         particle['y'] - particle['size']/2))
+
 class Coin:
     def __init__(self, x, y):
         # Position
@@ -20,7 +74,10 @@ class Coin:
         
         # State
         self.collected = False
-        self.should_remove = False  # New flag to mark coins for removal
+        self.should_remove = False
+        
+        # Burst animation
+        self.burst = None
         
     def load_image(self):
         """Load the coin sprite"""
@@ -50,24 +107,37 @@ class Coin:
             else:
                 # Mark the coin for removal when it hits the ground
                 self.should_remove = True
+                
+        # Update burst animation if it exists
+        if self.burst:
+            self.burst.update()
+            if not self.burst.alive:
+                self.should_remove = True
     
     def collect(self):
-        """Mark coin as collected"""
-        self.collected = True
-        return 1  # Return coin value
+        """Mark coin as collected and create burst effect"""
+        if not self.collected:
+            self.collected = True
+            self.burst = CoinBurst(self.x, self.y)
+            return 1  # Return coin value
+        return 0
     
     def draw(self, surface):
-        """Draw the coin if not collected and not marked for removal"""
+        """Draw the coin if not collected, or the burst animation if collecting"""
         if not self.collected and not self.should_remove and self.image:
             # Calculate position (centered on the coin's position)
             rect = self.image.get_rect(center=(int(self.x), int(self.y)))
             
             # Draw the coin
             surface.blit(self.image, rect)
+        
+        # Draw burst animation if it exists
+        if self.burst and self.burst.alive:
+            self.burst.draw(surface)
     
     def collides_with_player(self, player_rect):
         """Check if the coin collides with the player"""
-        if self.collected:
+        if self.collected or self.should_remove:
             return False
             
         # Simple circle-rectangle collision
