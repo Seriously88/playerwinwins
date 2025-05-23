@@ -11,6 +11,17 @@ class IntroSequence:
         self.clock = pygame.time.Clock()
         self.running = True
         
+        # Initialize pygame mixer for sound
+        pygame.mixer.init()
+        
+        # Load transition video audio
+        try:
+            self.transition_audio = pygame.mixer.Sound('assests/transitionaudio.WAV')
+            self.transition_audio.set_volume(0.8)  # Set appropriate volume
+        except Exception as e:
+            print(f"Error loading transition audio: {e}")
+            self.transition_audio = None
+
         # Load instruction scene
         try:
             self.instruction_scene = pygame.image.load('assests/instruction.png')
@@ -37,11 +48,16 @@ class IntroSequence:
 
     def play_video(self):
         # Open the video file
-        video = cv2.VideoCapture('assests/victoryendingscene/transitionscene.mp4')
+        video = cv2.VideoCapture('assests/introscene+BGM/transitionscene(1).mp4')
         
         if not video.isOpened():
             print("Error loading video file")
             return False
+            
+        # Play the audio
+        if self.transition_audio:
+            audio_channel = pygame.mixer.Channel(0)
+            audio_channel.play(self.transition_audio)
             
         while True:
             ret, frame = video.read()
@@ -60,15 +76,21 @@ class IntroSequence:
             # Handle events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    if self.transition_audio:
+                        pygame.mixer.Channel(0).stop()  # Stop audio on quit
                     video.release()
                     return False
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
+                        if self.transition_audio:
+                            pygame.mixer.Channel(0).stop()  # Stop audio on space key skip
                         video.release()
                         return True
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if event.button == 1:  # Left click
                         if self.skip_button_rect.collidepoint(event.pos):
+                            if self.transition_audio:
+                                pygame.mixer.Channel(0).stop()  # Stop audio on skip button click
                             video.release()
                             return True
             
@@ -85,6 +107,8 @@ class IntroSequence:
             self.clock.tick(30)
             
         video.release()
+        if self.transition_audio:
+            pygame.mixer.Channel(0).stop()  # Stop audio when video ends naturally
         return True
 
     def show_instructions(self):

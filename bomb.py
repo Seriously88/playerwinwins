@@ -1,5 +1,6 @@
 import pygame
 import random
+import math
 from config import *
 
 class ExplosionAnimation:
@@ -77,14 +78,23 @@ class ExplosionAnimation:
 
 class Bomb:
     def __init__(self, x, y):
-        # Position
         self.x = x
         self.y = y
-        self.radius = 20  # Collision radius
+        self.radius = 15
+        self.vy = 0  # Vertical velocity
+        self.gravity = 0.5
+        self.should_remove = False
+        self.explosion_timer = 0
+        self.explosion_duration = 30  # Duration in frames
+        self.is_exploding = False
         
-        # Movement
-        self.fall_speed = random.uniform(2, 4)  # Faster than coins
-        self.target_y = COURT_GROUND_Y - 30  # Where bomb disappears
+        # Load explosion sound
+        try:
+            self.explosion_sound = pygame.mixer.Sound('assests/Explosion Sound.wav')
+            self.explosion_sound.set_volume(0.7)  # Set volume to 70%
+        except Exception as e:
+            print(f"Error loading explosion sound: {e}")
+            self.explosion_sound = None
         
         # Load the bomb image
         self.image = None
@@ -92,7 +102,6 @@ class Bomb:
         
         # State
         self.hit_player = False
-        self.should_remove = False
         
         # Explosion animation
         self.explosion = None
@@ -114,28 +123,23 @@ class Bomb:
     
     def update(self):
         """Update bomb position and explosion animation"""
-        # Update explosion if it exists
-        if self.explosion:
-            self.explosion.update()
-            if not self.explosion.alive:
-                self.should_remove = True
-            return
+        if not self.is_exploding:
+            # Apply gravity
+            self.vy += self.gravity
+            self.y += self.vy
             
-        # Update bomb position if not exploded
-        if not self.hit_player and not self.should_remove:
-            # Move down
-            self.y += self.fall_speed
-            
-            # Add slight swaying motion
-            self.x += random.uniform(-0.5, 0.5)
-            
-            # Check if reached ground
-            if self.y >= self.target_y:
+            # Check if bomb hits the ground
+            if self.y >= COURT_GROUND_Y - self.radius:
                 self.explode()
+        else:
+            # Update explosion animation
+            self.explosion_timer += 1
+            if self.explosion_timer >= self.explosion_duration:
+                self.should_remove = True
     
     def draw(self, surface):
         """Draw the bomb or its explosion animation"""
-        if self.explosion:
+        if self.is_exploding:
             self.explosion.draw(surface)
         elif not self.should_remove and self.image:
             rect = self.image.get_rect(center=(int(self.x), int(self.y)))
@@ -143,26 +147,34 @@ class Bomb:
     
     def collides_with_player(self, player_rect):
         """Check if the bomb collides with the player"""
-        if self.hit_player or self.should_remove or self.explosion:
+        if self.is_exploding:
             return False
             
-        # Circle-rectangle collision check
-        closest_x = max(player_rect.left, min(self.x, player_rect.right))
-        closest_y = max(player_rect.top, min(self.y, player_rect.bottom))
+        # Calculate distance between bomb center and player center
+        bomb_center = (self.x, self.y)
+        player_center = (player_rect.centerx, player_rect.centery)
         
-        distance_x = self.x - closest_x
-        distance_y = self.y - closest_y
+        distance = math.sqrt(
+            (bomb_center[0] - player_center[0])**2 +
+            (bomb_center[1] - player_center[1])**2
+        )
         
-        return (distance_x * distance_x + distance_y * distance_y) < (self.radius * self.radius)
+        # Collision occurs if distance is less than sum of bomb radius and player "radius"
+        player_radius = (player_rect.width + player_rect.height) / 4  # Approximate player as circle
+        return distance < (self.radius + player_radius)
     
     def hit(self):
         """Mark bomb as hit by player and create explosion"""
-        if not self.hit_player and not self.explosion:
-            self.hit_player = True
+        if not self.is_exploding:
             self.explode()
             return -5  # Penalty of 5 coins
         return 0
         
     def explode(self):
-        """Create explosion animation at current position"""
-        self.explosion = ExplosionAnimation(self.x, self.y) 
+        """Start the explosion animation and play sound"""
+        if not self.is_exploding:
+            self.is_exploding = True
+            # Play explosion sound
+            if self.explosion_sound:
+                pygame.mixer.Channel(4).play(self.explosion_sound)
+            self.explosion = ExplosionAnimation(self.x, self.y) 

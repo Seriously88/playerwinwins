@@ -22,6 +22,14 @@ class BadmintonGame:
         # Initialize pygame mixer for sound
         pygame.mixer.init()
         
+        # Load victory video audio
+        try:
+            self.victory_video_audio = pygame.mixer.Sound('assests/endscenessound.WAV')
+            self.victory_video_audio.set_volume(0.8)  # Set appropriate volume
+        except Exception as e:
+            print(f"Error loading victory video audio: {e}")
+            self.victory_video_audio = None
+        
         # Load sound effects
         try:
             self.hit_sound = pygame.mixer.Sound(HIT_SOUND)
@@ -156,25 +164,27 @@ class BadmintonGame:
         self.next_button_text = self.next_button_font.render("Skip", True, WHITE)
         self.next_button_text_rect = self.next_button_text.get_rect(center=self.next_button_rect.center)
         
-        # Load losing scene
+        # Load losing scene and sound
         try:
-            self.losing_cutscene = pygame.image.load('assests/cutscenes/losingscene.png')
-            self.losing_cutscene = pygame.transform.scale(self.losing_cutscene, (WIDTH, HEIGHT))
-            # Load losing scene sound effect
-            self.losing_sound = pygame.mixer.Sound('assests/Game Over _ 01 - ASMR - Free Sound Effects (online-audio-converter.com).wav')
+            self.losing_scene = pygame.image.load('assests/cutscenes/losingscene.png')
+            self.losing_scene = pygame.transform.scale(self.losing_scene, (WIDTH, HEIGHT))
+            self.losing_sound = pygame.mixer.Sound('assests/losesound effect.wav')
             self.losing_sound.set_volume(0.8)  # Set appropriate volume
         except Exception as e:
             print(f"Error loading losing scene assets: {e}")
-            self.losing_cutscene = None
+            self.losing_scene = None
             self.losing_sound = None
         
-        # Restart button properties - bigger and centered
-        self.restart_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2, 200, 70)  # Increased size and centered
-        self.restart_button_color = (255, 215, 0)  # Golden color
-        self.restart_button_hover_color = (255, 255, 0)  # Bright yellow
-        self.restart_button_font = pygame.font.SysFont(None, 60)  # Increased font size
-        self.restart_button_text = self.restart_button_font.render("Restart", True, (0, 0, 0))
+        # Restart button properties
+        self.restart_button_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 100, 200, 60)
+        self.restart_button_color = (255, 215, 0)  # Gold color
+        self.restart_button_hover_color = (255, 255, 0)  # Bright yellow for hover
+        self.restart_button_font = pygame.font.SysFont(None, 48)
+        self.restart_button_text = self.restart_button_font.render("Restart Game", True, (0, 0, 0))
         self.restart_button_text_rect = self.restart_button_text.get_rect(center=self.restart_button_rect.center)
+        
+        # Track if losing sound has been played
+        self.losing_sound_played = False
         
         # Victory dialog texts
         self.victory_dialog_font = pygame.font.SysFont(None, 48)
@@ -220,10 +230,16 @@ class BadmintonGame:
             if event.type == pygame.QUIT:
                 self.running = False
             
+            # Handle mouse clicks
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Left click
                 if self.match_over and self.player_lives <= 0:
+                    # Check if restart button was clicked
                     if self.restart_button_rect.collidepoint(event.pos):
+                        # Stop the losing sound if it's playing
+                        if self.losing_sound:
+                            self.losing_sound.stop()
                         self.reset_game(full_reset=True)
+                        self.losing_sound_played = False  # Reset the sound played flag
             
             # Handle key presses
             if event.type == pygame.KEYDOWN:
@@ -634,36 +650,34 @@ class BadmintonGame:
         
         # Display match result if over
         if self.match_over:
-            self.screen.fill(BLACK)
-            
-            if self.player_lives <= 0 and self.losing_cutscene:
+            if self.player_lives <= 0:
+                # Fill screen with black first
+                self.screen.fill(BLACK)
+                
                 # Display the losing scene image
-                self.screen.blit(self.losing_cutscene, (0, 0))
-                
-                # Play losing sound if not already played
-                if not self.game_over_played and self.losing_sound:
-                    self.losing_sound.play()
-                    self.game_over_played = True
-                
-                # Draw restart button with hover effect
-                mouse_pos = pygame.mouse.get_pos()
-                button_color = self.restart_button_hover_color if self.restart_button_rect.collidepoint(mouse_pos) else self.restart_button_color
-                pygame.draw.rect(self.screen, button_color, self.restart_button_rect, border_radius=10)
-                self.screen.blit(self.restart_button_text, self.restart_button_text_rect)
-            
+                if self.losing_scene:
+                    self.screen.blit(self.losing_scene, (0, 0))
+                    
+                    # Play losing sound if not already played
+                    if not self.losing_sound_played and self.losing_sound:
+                        self.losing_sound.play()
+                        self.losing_sound_played = True
+                    
+                    # Draw restart button with hover effect
+                    mouse_pos = pygame.mouse.get_pos()
+                    button_color = self.restart_button_hover_color if self.restart_button_rect.collidepoint(mouse_pos) else self.restart_button_color
+                    pygame.draw.rect(self.screen, button_color, self.restart_button_rect, border_radius=10)
+                    self.screen.blit(self.restart_button_text, self.restart_button_text_rect)
+
             elif self.player_score > self.npc_score:
                 # Start victory sequence
                 if not self.victory_sequence:
                     self.victory_sequence = True
                     self.victory_sequence_start = pygame.time.get_ticks()
             else:
-                # Fallback to displaying text messages
-                winner = "Player" if (self.player_score > self.npc_score and self.player_lives > 0) else "NPC"
-                display_message(self.screen, f"{winner} wins the match!", (WIDTH//2 - 120, HEIGHT//2 - 50), 48)
-                if self.player_lives <= 0:
-                    display_message(self.screen, "Player is out of lives!", (WIDTH//2 - 100, HEIGHT//2), 36)
-                else:
-                    display_message(self.screen, f"Final score: {self.player_score}-{self.npc_score}", (WIDTH//2 - 100, HEIGHT//2), 36)
+                # Fallback text messages
+                display_message(self.screen, "Game Over!", (WIDTH//2 - 100, HEIGHT//2 - 50), 48)
+                display_message(self.screen, f"Final score: {self.player_score}-{self.npc_score}", (WIDTH//2 - 100, HEIGHT//2), 36)
                 display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
         
         # Draw flash effect overlay
@@ -694,17 +708,18 @@ class BadmintonGame:
             self.npc_score = 0
             self.player_lives = 3
             self.match_over = False
-            self.game_over_played = False  # Reset sound flag
-            self.victory_played = False    # Reset victory sound flag
-            self.victory_sequence = False  # Reset victory sequence
-            self.victory_video_played = False  # Reset victory video flag
+            self.game_over_played = False
+            self.victory_played = False
+            self.victory_sequence = False
+            self.victory_video_played = False
+            self.losing_sound_played = False  # Reset losing sound flag
             
             # Reset flash effect
             self.flash_effect = False
             self.flash_intensity = 0
-            self.consecutive_wins = 0  # Reset consecutive wins counter
+            self.consecutive_wins = 0
             
-            # Reset coin system on full game reset
+            # Reset coin system
             self.coin_count = 0
             
             # Reset bomb system
@@ -800,7 +815,7 @@ class BadmintonGame:
     def play_victory_video(self):
         """Play the victory ending video sequence"""
         # Open the video file
-        video = cv2.VideoCapture('assests/victoryendingscene/victoryendingscene.mp4')
+        video = cv2.VideoCapture('assests/introscene+BGM/victoryendingscene(1).mp4')
         
         if not video.isOpened():
             print("Error loading victory video file")
@@ -808,6 +823,10 @@ class BadmintonGame:
             
         # Stop background music during video
         pygame.mixer.music.pause()
+        
+        # Play victory video audio
+        if self.victory_video_audio:
+            pygame.mixer.Channel(1).play(self.victory_video_audio)
             
         while True:
             ret, frame = video.read()
