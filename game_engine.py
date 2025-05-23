@@ -140,7 +140,8 @@ class BadmintonGame:
                 pygame.image.load('assests/cutscenes/lv2victorycutecene1.png'),
                 pygame.image.load('assests/cutscenes/lv2victorycutscene2.png'),
                 pygame.image.load('assests/cutscenes/lv2victorycutscene3.png'),
-                pygame.image.load('assests/cutscenes/lv2victorycutscene4.png')
+                pygame.image.load('assests/cutscenes/lv2victorycutscene4.png'),
+                pygame.image.load('assests/cutscenes/lv2victorycutscene5.png')
             ]
             # Scale all victory scenes
             self.victory_scenes = [pygame.transform.scale(img, (WIDTH, HEIGHT)) for img in self.victory_scenes]
@@ -180,7 +181,7 @@ class BadmintonGame:
         self.victory_dialog4 = self.victory_dialog_font.render("Alex walks towards the door...", True, (255, 255, 255))
         self.victory_dialog4_rect = self.victory_dialog4.get_rect(center=(WIDTH//2, HEIGHT - 100))
 
-        self.victory_dialog5 = self.victory_dialog_font.render("Alex is disappearing as he walks towards the door...", True, (255, 255, 255))
+        self.victory_dialog5 = self.victory_dialog_font.render("Alex disappearsas he walks towards the door", True, (255, 255, 255))
         self.victory_dialog5_rect = self.victory_dialog5.get_rect(center=(WIDTH//2, HEIGHT - 100))
     
     def handle_events(self):
@@ -253,13 +254,14 @@ class BadmintonGame:
             # Calculate time since sequence started
             elapsed = (current_time - self.victory_sequence_start) / 1000  # Convert to seconds
             
-            # Auto-advance after 6 seconds if not manually advanced
-            if elapsed >= 6:
+            # Auto-advance after 6 seconds if not manually advanced and not on last scene
+            if elapsed >= 6 and self.current_victory_scene < 4:
                 self.advance_victory_scene()
             
-            # Update button hover effect
-            mouse_pos = pygame.mouse.get_pos()
-            self.next_button_color = (0, 200, 255) if self.next_button_rect.collidepoint(mouse_pos) else (0, 255, 255)
+            # Update button hover effect only if not on last scene
+            if self.current_victory_scene < 4:
+                mouse_pos = pygame.mouse.get_pos()
+                self.next_button_color = (0, 200, 255) if self.next_button_rect.collidepoint(mouse_pos) else (0, 255, 255)
             
             return
             
@@ -491,10 +493,15 @@ class BadmintonGame:
                 self.screen.blit(self.victory_dialog2, self.victory_dialog2_rect)
             elif self.current_victory_scene == 2:
                 self.screen.blit(self.victory_dialog3, self.victory_dialog3_rect)
+            elif self.current_victory_scene == 3:
+                self.screen.blit(self.victory_dialog4, self.victory_dialog4_rect)
+            elif self.current_victory_scene == 4:
+                self.screen.blit(self.victory_dialog5, self.victory_dialog5_rect)
             
-            # Draw Next button
-            pygame.draw.rect(self.screen, self.next_button_color, self.next_button_rect, border_radius=10)
-            self.screen.blit(self.next_button_text, self.next_button_text_rect)
+            # Draw Next button only if not on the last scene
+            if self.current_victory_scene < 4:
+                pygame.draw.rect(self.screen, self.next_button_color, self.next_button_rect, border_radius=10)
+                self.screen.blit(self.next_button_text, self.next_button_text_rect)
             
             pygame.display.flip()
             return
@@ -713,7 +720,7 @@ class BadmintonGame:
 
     def advance_victory_scene(self):
         """Advance to the next victory scene or end sequence"""
-        if self.current_victory_scene < 3:
+        if self.current_victory_scene < 4:  # Changed from 3 to 4 to accommodate new scene
             # Stop crowd cheering when moving from first scene
             if self.current_victory_scene == 0 and self.crowd_cheering:
                 self.crowd_cheering.stop()
