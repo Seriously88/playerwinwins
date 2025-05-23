@@ -1,5 +1,6 @@
 import pygame
 import random
+import math
 from config import *
 from player import Player, NPC
 from shuttle import Shuttlecock
@@ -206,6 +207,13 @@ class BadmintonGame:
 
         self.victory_dialog5 = self.victory_dialog_font.render("Alex is disappearing as he walks towards the door...", True, (255, 255, 255))
         self.victory_dialog5_rect = self.victory_dialog5.get_rect(center=(WIDTH//2, HEIGHT - 100))
+        
+        # Flash effect variables
+        self.flash_effect = False
+        self.flash_start_time = 0
+        self.flash_duration = 4000  # Changed to 4 seconds (4000 milliseconds)
+        self.flash_intensity = 0
+        self.flash_speed = 15  # Speed of flash pulsing
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -267,10 +275,33 @@ class BadmintonGame:
         self.feedback_message = message
         self.feedback_color = color
         self.feedback_timer = duration
+        
+        # Start flash effect after 5 consecutive wins
+        if "Point for Player" in message:
+            self.consecutive_wins += 1
+            print(f"Consecutive wins: {self.consecutive_wins}")  # Debug print
+            if self.consecutive_wins >= 5:
+                self.flash_effect = True
+                self.flash_start_time = pygame.time.get_ticks()
+                self.consecutive_wins = 0  # Reset consecutive wins
+                self.show_feedback("FLASH ATTACK!", (255, 255, 0), 120)  # Show special feedback for flash effect
+        elif "Point for NPC" in message:
+            # Only reset consecutive wins when NPC scores
+            self.consecutive_wins = 0
     
     def update(self):
         # Get the current time for cutscene timing
         current_time = pygame.time.get_ticks()
+        
+        # Update flash effect
+        if self.flash_effect:
+            time_elapsed = current_time - self.flash_start_time
+            if time_elapsed < self.flash_duration:
+                # Create a pulsing effect using sine wave
+                self.flash_intensity = abs(math.sin(time_elapsed * 0.01)) * 255  # Increased max intensity
+            else:
+                self.flash_effect = False
+                self.flash_intensity = 0
         
         # Handle victory sequence
         if self.victory_sequence:
@@ -410,13 +441,9 @@ class BadmintonGame:
                         self.player_serves = True
                         self.show_feedback("Point for Player!", BLUE)
                         
-                        # Track consecutive player wins for coin spawning
-                        self.consecutive_wins += 1
-                        
                         # Spawn coins after two consecutive wins
                         if self.consecutive_wins >= 2:
                             self.spawn_coins(3)  # Spawn 3 coins
-                            self.consecutive_wins = 0  # Reset counter
                 elif self.shuttle.out_of_bounds:
                     # Point goes to the side that didn't hit it last
                     # We'll determine this based on the direction the shuttle was moving
@@ -439,13 +466,9 @@ class BadmintonGame:
                         self.player_serves = True
                         self.show_feedback("Out of bounds! Point for Player", BLUE)
                         
-                        # Track consecutive player wins for coin spawning
-                        self.consecutive_wins += 1
-                        
                         # Spawn coins after two consecutive wins
                         if self.consecutive_wins >= 2:
                             self.spawn_coins(3)  # Spawn 3 coins
-                            self.consecutive_wins = 0  # Reset counter
                 
                 # Check if match has been won due to lives
                 if self.player_lives <= 0:
@@ -638,6 +661,13 @@ class BadmintonGame:
                     display_message(self.screen, f"Final score: {self.player_score}-{self.npc_score}", (WIDTH//2 - 100, HEIGHT//2), 36)
                 display_message(self.screen, "Press R to restart", (WIDTH//2 - 80, HEIGHT//2 + 50), 28)
         
+        # Draw flash effect overlay
+        if self.flash_effect and self.flash_intensity > 0:
+            flash_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            flash_color = (255, 255, 255, int(self.flash_intensity))
+            flash_surface.fill(flash_color)
+            self.screen.blit(flash_surface, (0, 0))
+        
         pygame.display.flip()
     
     def run(self):
@@ -664,9 +694,13 @@ class BadmintonGame:
             self.crowd_cheer_played = False  # Reset crowd cheer flag
             self.scene_sounds_played = {2: False, 3: False, 4: False, 5: False}  # Reset scene sound tracking
             
+            # Reset flash effect
+            self.flash_effect = False
+            self.flash_intensity = 0
+            self.consecutive_wins = 0  # Reset consecutive wins counter
+            
             # Reset coin system on full game reset
-            self.consecutive_wins = 0
-            # Don't reset coin_count to preserve player's collection
+            self.coin_count = 0
             
             # Restart background music if it was stopped
             if not self.music_playing:

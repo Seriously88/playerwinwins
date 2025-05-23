@@ -20,6 +20,7 @@ class Coin:
         
         # State
         self.collected = False
+        self.should_remove = False  # New flag to mark coins for removal
         
     def load_image(self):
         """Load the coin sprite"""
@@ -39,7 +40,7 @@ class Coin:
     
     def update(self):
         """Update coin position for floating down effect"""
-        if not self.collected:
+        if not self.collected and not self.should_remove:
             # Only move down if not at the target position
             if self.y < self.target_y:
                 self.y += self.fall_speed
@@ -47,8 +48,8 @@ class Coin:
                 # Add slight side-to-side movement for a floating effect
                 self.x += random.uniform(-0.3, 0.3)
             else:
-                # Slightly hover when reached target position
-                self.y += math.sin(pygame.time.get_ticks() * 0.003) * 0.2
+                # Mark the coin for removal when it hits the ground
+                self.should_remove = True
     
     def collect(self):
         """Mark coin as collected"""
@@ -56,8 +57,8 @@ class Coin:
         return 1  # Return coin value
     
     def draw(self, surface):
-        """Draw the coin if not collected"""
-        if not self.collected and self.image:
+        """Draw the coin if not collected and not marked for removal"""
+        if not self.collected and not self.should_remove and self.image:
             # Calculate position (centered on the coin's position)
             rect = self.image.get_rect(center=(int(self.x), int(self.y)))
             

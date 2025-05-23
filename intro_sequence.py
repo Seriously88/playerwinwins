@@ -26,6 +26,14 @@ class IntroSequence:
         self.button_font = pygame.font.SysFont(None, 36)
         self.start_button_text = self.button_font.render("Start Game", True, (0, 0, 0))
         self.start_button_text_rect = self.start_button_text.get_rect(center=self.start_button_rect.center)
+        
+        # Skip button properties
+        self.skip_button_rect = pygame.Rect(WIDTH - 120, 20, 100, 40)  # Position in top right
+        self.skip_button_color = (200, 200, 200)  # Light gray
+        self.skip_button_hover_color = (160, 160, 160)  # Darker gray for hover
+        self.skip_button_font = pygame.font.SysFont(None, 32)
+        self.skip_button_text = self.skip_button_font.render("Skip", True, (0, 0, 0))
+        self.skip_button_text_rect = self.skip_button_text.get_rect(center=self.skip_button_rect.center)
 
     def play_video(self):
         # Open the video file
@@ -58,9 +66,21 @@ class IntroSequence:
                     if event.key == pygame.K_SPACE:
                         video.release()
                         return True
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button == 1:  # Left click
+                        if self.skip_button_rect.collidepoint(event.pos):
+                            video.release()
+                            return True
             
             # Display frame
             self.screen.blit(frame, (0, 0))
+            
+            # Draw skip button with hover effect
+            mouse_pos = pygame.mouse.get_pos()
+            button_color = self.skip_button_hover_color if self.skip_button_rect.collidepoint(mouse_pos) else self.skip_button_color
+            pygame.draw.rect(self.screen, button_color, self.skip_button_rect, border_radius=5)
+            self.screen.blit(self.skip_button_text, self.skip_button_text_rect)
+            
             pygame.display.flip()
             self.clock.tick(30)
             
